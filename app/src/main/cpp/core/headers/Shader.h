@@ -23,6 +23,8 @@ public:
 
     void enableVertexAttribArray(GLint index);
 
+    void disableVertexAttribPointer(GLint index);
+
     void vertexAttribPointer(GLint positionHandle,int type, int size, int stride, const void *data);
 
     unsigned int getUniformLocation(const char *name);

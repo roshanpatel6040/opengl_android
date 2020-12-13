@@ -178,13 +178,13 @@ void drawPyramid() {
 void drawTriangle() {
     int CHORDS_COLOR_PER_VERTEX = 4;
     int BYTES_PER_FLOAT = 4;
-    float vertices[9] = {0.0f, 0.5f, 0.0f,
-                         -0.5f, -0.5f, 0.0f,
-                         0.5f, -0.5f, 0.0f};
-    float color[4] = {1.0f, 0.5f, 0.0f, 1.0f};
-    float vertexColors[12] = {1.0f, 1.0f, 1.0f, 1.0f,
-                              1.0f, 0.0f, 0.0f, 1.0f,
-                              0.0f, 1.0f, 1.0f, 1.0f};
+    float vertices[] = {
+        //    X    Y     Z     R     G      B    A
+            0.0f, 0.5f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f,
+            -0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f,
+            0.5f, -0.5f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f};
+
+    float color[] = {1.0f, 0.5f, 0.0f, 1.0f};
 
     // varying field uses to transfer data between vertex and fragment shader
     std::string vertexShaderCode = "attribute vec4 position;\n"
@@ -207,21 +207,28 @@ void drawTriangle() {
     GLCall(Shader shader(program, vertexShaderCode, fragmentShaderCode))
     GLCall(glLinkProgram(program))
     GLCall(glUseProgram(program))
-//    GLCall(VertexBuffer vb(vertices, sizeof(vertices)))
+
+    GLCall(VertexBuffer vb(vertices, sizeof(vertices)))
+
     GLCall(GLint positionHandle = shader.getAttributeLocation("position"))
+    GLCall(shader.vertexAttribPointer(positionHandle, GL_FLOAT, 3, 7 * sizeof(float),
+                                      (GLvoid *) nullptr))
     GLCall(shader.enableVertexAttribArray(positionHandle))
-    GLCall(shader.vertexAttribPointer(positionHandle, GL_FLOAT, 3, 3 * sizeof(float), vertices))
+
     GLCall(GLuint colorPositionHandle = shader.getAttributeLocation("v_color"))
+    GLCall(shader.vertexAttribPointer(colorPositionHandle, GL_FLOAT, 4, 7 * sizeof(float),
+                                      (GLvoid *) (3 * sizeof(float))))
     GLCall(shader.enableVertexAttribArray(colorPositionHandle))
-    GLCall(shader.vertexAttribPointer(colorPositionHandle, GL_FLOAT, 4, 4 * sizeof(float),
-                                      vertexColors))
+
     GLCall(int colorHandle = shader.getUniformLocation("color"))
     GLCall(shader.setUniform4fv(colorHandle,
                                 sizeof(color) / CHORDS_COLOR_PER_VERTEX / BYTES_PER_FLOAT, color))
+
     GLCall(glDrawArrays(GL_TRIANGLES, 0, 3))
-    GLCall(glDisableVertexAttribArray(positionHandle))
-    GLCall(glDisableVertexAttribArray(colorPositionHandle))
+    GLCall(shader.disableVertexAttribPointer(positionHandle))
+    GLCall(shader.disableVertexAttribPointer(colorPositionHandle))
     shader.unBind();
+    vb.unBind();
 }
 
 void drawSquare() {
@@ -239,11 +246,13 @@ void drawSquare() {
 
     // Vertices before orthographical projection or any projection
     // Projection will be counted as -1.0f to 1.0f for left right and bottom top
+    // tc1 and tc2 represents texChords for left right and top bottom
     float vertices[] = {
-            -0.5f, 0.5f, 0.0f,
-            -0.5f, -0.5f, 0.0f,
-            0.5f, -0.5f, 0.0f,
-            0.5f, 0.5f, 0.0f,
+            // x     y     z    tc1   tc2
+            -0.5f, 0.5f, 0.0f, 0.0f, 1.0f, // to map texture bottom left
+            -0.5f, -0.5f, 0.0f, 0.0f, 0.0f, // to map texture bottom right
+            0.5f, -0.5f, 0.0f, 1.0f, 0.0f, // to map texture top right
+            0.5f, 0.5f, 0.0f, 1.0f, 1.0f, // to map texture top left
     };
 
     // Text chords before texture at 4 points(direction)
@@ -324,19 +333,20 @@ void drawSquare() {
 
     // Core OpenGL requires that we use a VAO so it knows what to do with our vertex inputs. If we fail to bind a VAO, OpenGL will most likely refuse to draw anything.
 
-
-//    GLCall(VertexBuffer vb(vertices, sizeof(vertices)))
-//    GLCall(IndexBuffer ib(order, sizeof(order)))
+    GLCall(VertexBuffer vb(vertices, sizeof(vertices)))
+    GLCall(IndexBuffer ib(order, sizeof(order)))
 
     GLCall(glUseProgram(program))
 
     GLCall(GLint positionHandle = shader.getAttributeLocation("position"))
-    GLCall(shader.vertexAttribPointer(positionHandle, GL_FLOAT, 3, 3 * sizeof(float), vertices))
+    GLCall(shader.vertexAttribPointer(positionHandle, GL_FLOAT, 3, 5 * sizeof(float),
+                                      (GLvoid *) nullptr))
     GLCall(shader.enableVertexAttribArray(positionHandle))
 
     GLCall(GLint texChordsHandle = shader.getAttributeLocation("texChords"))
+    GLCall(shader.vertexAttribPointer(texChordsHandle, GL_FLOAT, 2, 5 * sizeof(float),
+                                      (GLvoid *) (3 * sizeof(float))))
     GLCall(shader.enableVertexAttribArray(texChordsHandle))
-    GLCall(shader.vertexAttribPointer(texChordsHandle, GL_FLOAT, 2, 0, texChords))
 
     GLCall(GLint mvpHandle = shader.getUniformLocation("u_MVP"))
     GLCall(shader.setUniformMatrix4fv(mvpHandle, 1 /* No. of matrix array in our case only 1*/,
@@ -350,22 +360,23 @@ void drawSquare() {
     GLCall(GLint colorHandle = shader.getUniformLocation("color"))
     GLCall(shader.setUniform4fv(colorHandle, 2, color)) // Passing two rgba in float array
 
-    GLCall(glDrawElements(GL_TRIANGLES, sizeof(order) / sizeof(unsigned int), GL_UNSIGNED_INT,
-                          order))
-    GLCall(glDisableVertexAttribArray(positionHandle))
-    GLCall(glDisableVertexAttribArray(texChordsHandle))
+    GLCall(glDrawElements(GL_TRIANGLES, ib.getCount(), GL_UNSIGNED_INT,
+                          nullptr))
+
+    GLCall(shader.disableVertexAttribPointer(positionHandle))
+    GLCall(shader.disableVertexAttribPointer(texChordsHandle))
 
     GLCall(texture.~Texture())
     GLCall(shader.unBind())
-//    GLCall(vb.unBind())
-//    GLCall(ib.unBind())
+    GLCall(vb.unBind())
+    GLCall(ib.unBind())
 }
 
 extern "C" {
 void Java_com_demo_opengl_Render_render(JNIEnv *env, jobject object) {
     glClear(GL_COLOR_BUFFER_BIT);
-//    drawTriangle();
     drawSquare();
+    drawTriangle();
 //    drawPyramid();
 }
 

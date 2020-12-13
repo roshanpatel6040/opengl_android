@@ -70,4 +70,8 @@ void Shader::setUniform1i(unsigned int location, unsigned int textureId) {
     glUniform1i(location, textureId);
 }
 
+void Shader::disableVertexAttribPointer(GLint index) {
+    glDisableVertexAttribArray(index);
+}
+
 
