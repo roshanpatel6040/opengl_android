@@ -6,6 +6,7 @@ import android.opengl.GLES11Ext.GL_TEXTURE_EXTERNAL_OES
 import android.opengl.GLES20
 import android.opengl.GLSurfaceView
 import android.os.Bundle
+import android.util.Log
 import android.view.Surface
 import androidx.appcompat.app.AppCompatActivity
 import java.nio.ByteBuffer
@@ -75,7 +76,7 @@ class CameraActivity : AppCompatActivity() {
                 GLES20.glBindTexture(GL_TEXTURE_EXTERNAL_OES, textureBuffer[0])
 
                 surfaceTexture = SurfaceTexture(textureBuffer[0])
-                surfaceTexture.setDefaultBufferSize(width, height)
+                surfaceTexture.setDefaultBufferSize(640, 480)
                 surfaceTexture.setOnFrameAvailableListener {
                     synchronized(lock) {
                         frameAvailable = true
