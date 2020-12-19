@@ -20,7 +20,7 @@ private:
     unsigned char *allocationBuffer;
 
 public:
-    Texture(std::string path, int slot);
+    Texture(std::string path, int slot, int channel, int type);
 
     void bind();
 
@@ -30,6 +30,7 @@ public:
 
     inline int getSlot() { return slot; };
 
+    inline int getReferenceId() { return mReferenceID; };
 };
 
 #endif //OPENGL_TEXTURE_H

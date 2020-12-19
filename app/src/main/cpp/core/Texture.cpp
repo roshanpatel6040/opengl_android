@@ -10,11 +10,11 @@
 #include "stb_image.h"
 #include "android/log.h"
 
-Texture::Texture(std::string path, int slot) : slot(slot) {
+Texture::Texture(std::string path, int slot, int channel, int type) : slot(slot) {
     stbi_set_flip_vertically_on_load(1);
     // load image
     allocationBuffer = stbi_load(path.c_str(), &width, &height, &bpp,
-                                 4); // RGBA for channels so 4 channels
+                                 channel); // RGBA for channels so 4 channels
 
     GLCall(glActiveTexture(GL_TEXTURE0 + slot))
     GLCall(glGenTextures(1, &mReferenceID))
@@ -33,8 +33,12 @@ Texture::Texture(std::string path, int slot) : slot(slot) {
     // PNG texture tried to load from assets doesn't have alpha channel that's why image is loaded with RGB channel
     // Image loaded to texture with RGB channel
     // RGBA is supported when there are 4 channel's in texture
-//    GLCall(glPixelStorei(GL_UNPACK_ALIGNMENT, 1))
-    GLCall(glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE,
+//    if (type == GL_RGB) {
+//        GLCall(glPixelStorei(GL_UNPACK_ALIGNMENT, 1))
+//    } else {
+//        GLCall(glPixelStorei(GL_UNPACK_ALIGNMENT, 4))
+//    }
+    GLCall(glTexImage2D(GL_TEXTURE_2D, 0, type, width, height, 0, type, GL_UNSIGNED_BYTE,
                         allocationBuffer))
 
     // Free image allocation bugger

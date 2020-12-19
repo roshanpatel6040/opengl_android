@@ -46,7 +46,7 @@ GLint Shader::getAttributeLocation(const char *name) {
 }
 
 unsigned int Shader::getUniformLocation(const char *name) {
-    return glGetUniformLocation(mProgramReferenceID, name);
+    return storeUniformLocation(name);
 }
 
 void Shader::enableVertexAttribArray(GLint index) {
@@ -72,6 +72,19 @@ void Shader::setUniform1i(unsigned int location, unsigned int textureId) {
 
 void Shader::disableVertexAttribPointer(GLint index) {
     glDisableVertexAttribArray(index);
+}
+
+unsigned int Shader::storeUniformLocation(const char *name) {
+//    if (mOrderedMapUniformLocation.find(name) != mOrderedMapUniformLocation.end()) {
+//        return mOrderedMapUniformLocation[name];
+//    }
+    GLint location = glGetUniformLocation(mProgramReferenceID, name);
+//    mOrderedMapUniformLocation[name] = location;
+    return location;
+}
+
+void Shader::setUniform1iv(unsigned int location, GLint *textureId) {
+    glUniform1iv(location, sizeof(textureId), textureId);
 }
 
 

@@ -2,6 +2,7 @@ package com.demo.opengl
 
 import android.content.Context
 import android.opengl.GLSurfaceView
+import android.view.MotionEvent
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
 
@@ -12,6 +13,21 @@ class GlSurface @JvmOverloads constructor(private val mContext: Context) : GLSur
         setRenderer(Render())
         renderMode = RENDERMODE_WHEN_DIRTY
     }
+
+    override fun onTouchEvent(event: MotionEvent?): Boolean {
+        val index = event?.actionIndex
+        val pointerId = event?.getPointerId(index!!)
+        when (event?.actionMasked) {
+            MotionEvent.ACTION_MOVE -> {
+                val x = event.x
+                val y = event.y
+                touchPoints(x, y)
+            }
+        }
+        return true
+    }
+
+    private external fun touchPoints(x: Float, y: Float)
 
 }
 

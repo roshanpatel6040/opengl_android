@@ -15,6 +15,7 @@ private:
     unsigned int mVertexShaderReferenceID;
     unsigned int mFragmentShaderReferenceID;
     GLuint mProgramReferenceID;
+//    std::map <std::string, GLint> mOrderedMapUniformLocation;
 
 public:
     Shader(int program, std::string vertexShaderSource, std::string fragmentShaderSource);
@@ -25,7 +26,8 @@ public:
 
     void disableVertexAttribPointer(GLint index);
 
-    void vertexAttribPointer(GLint positionHandle,int type, int size, int stride, const void *data);
+    void
+    vertexAttribPointer(GLint positionHandle, int type, int size, int stride, const void *data);
 
     unsigned int getUniformLocation(const char *name);
 
@@ -35,13 +37,17 @@ public:
 
     void setUniform1i(unsigned int location, unsigned int textureId);
 
+    void setUniform1iv(unsigned int location, GLint *textureId);
+
     ~Shader();
 
     void bind();
 
     void unBind();
 
-    static int loadShader(int type, const std::string& shaderSource);
+    static int loadShader(int type, const std::string &shaderSource);
+
+    unsigned int storeUniformLocation(const char *name);
 
 };
 

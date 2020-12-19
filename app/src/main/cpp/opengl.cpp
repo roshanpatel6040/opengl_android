@@ -223,7 +223,8 @@ void drawSquare() {
                                       glm::value_ptr(
                                               projection) /* pass reference at 0 0 position other work will be handled by opengl itself Basically opengl will take other values automatically */))
 
-    GLCall(Texture texture("/storage/emulated/0/Pictures/UHD Wallpapers/_uhdminimal34.jpg", 0))
+    GLCall(Texture texture("/storage/emulated/0/Pictures/UHD Wallpapers/_uhdminimal34.jpg", 0, 4,
+                   GL_RGBA))
     GLCall(GLint textureChords = shader.getUniformLocation("u_texture"))
     GLCall(shader.setUniform1i(textureChords, texture.getSlot()))
 
@@ -354,12 +355,113 @@ void drawPyramid() {
     GLCall(ib.unBind())
 }
 
+void loadMultipleTriangles() {
+    int CHORDS_COLOR_PER_VERTEX = 4;
+    int BYTES_PER_FLOAT = 4;
+    float vertices[] = {
+            // Triangle 1
+            //    X    Y     Z     R     G      B    A
+            0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f,
+            -1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f,
+            1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f,
+            // Triangle 2
+            -1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f,
+            1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 0.0f, 0.0f, 1.0f,
+            0.0f, -1.0f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f, 1.0f,
+    };
+
+    float color[] = {1.0f, 0.5f, 0.0f, 1.0f};
+
+    // varying field uses to transfer data between vertex and fragment shader
+    std::string vertexShaderCode = "attribute vec4 position;\n"
+                                   "attribute vec4 v_color;\n"
+                                   "attribute vec2 texChords;\n"
+                                   "attribute float textureFloat;\n"
+                                   "varying vec4 f_color;\n" // Passes to fragment shader
+                                   "varying float texturePosition;\n"
+                                   "varying vec2 chords;\n"
+                                   "void main()\n"
+                                   "{\n"
+                                   " texturePosition = textureFloat;\n"
+                                   " chords = texChords;\n"
+                                   " f_color = v_color;\n"
+                                   " gl_Position = position;\n"
+                                   "}";
+    std::string fragmentShaderCode = "uniform vec4 color;\n" // Get using uniform location
+                                     "varying vec4 f_color;\n" // Get from vertex shader
+                                     "varying float texturePosition;\n"
+                                     "varying vec2 chords;\n"
+                                     "uniform sampler2D textures[2];\n"
+                                     "void main()\n"
+                                     "{\n"
+                                     " highp int index = int(texturePosition);\n"
+                                     " gl_FragColor = texture2D(textures[index],chords);\n"
+                                     //                                     " gl_FragColor = f_color;\n"
+                                     //                                " gl_FragColor = color;\n"
+                                     "}";
+
+    GLCall(GLuint program = glCreateProgram())
+    GLCall(Shader shader(program, vertexShaderCode, fragmentShaderCode))
+    GLCall(glLinkProgram(program))
+    GLCall(glUseProgram(program))
+
+    GLCall(VertexBuffer vb(vertices, sizeof(vertices)))
+
+    GLCall(GLint positionHandle = shader.getAttributeLocation("position"))
+    GLCall(shader.vertexAttribPointer(positionHandle, GL_FLOAT, 3, 10 * sizeof(float),
+                                      (GLvoid *) nullptr))
+    GLCall(shader.enableVertexAttribArray(positionHandle))
+
+    GLCall(GLuint colorPositionHandle = shader.getAttributeLocation("v_color"))
+    GLCall(shader.vertexAttribPointer(colorPositionHandle, GL_FLOAT, 4, 10 * sizeof(float),
+                                      (GLvoid *) (3 * sizeof(float))))
+    GLCall(shader.enableVertexAttribArray(colorPositionHandle))
+
+    GLCall(GLuint chordsPositionHandle = shader.getAttributeLocation("texChords"))
+    GLCall(shader.vertexAttribPointer(chordsPositionHandle, GL_FLOAT, 2, 10 * sizeof(float),
+                                      (GLvoid *) (7 * sizeof(float))))
+    GLCall(shader.enableVertexAttribArray(chordsPositionHandle))
+
+    GLCall(GLuint textureIndexPositionHandle = shader.getAttributeLocation("texturePosition"))
+    GLCall(shader.vertexAttribPointer(textureIndexPositionHandle, GL_FLOAT, 1, 10 * sizeof(float),
+                                      (GLvoid *) (9 * sizeof(float))))
+    GLCall(shader.enableVertexAttribArray(textureIndexPositionHandle))
+
+    GLCall(int colorHandle = shader.getUniformLocation("color"))
+    GLCall(shader.setUniform4fv(colorHandle,
+                                sizeof(color) / CHORDS_COLOR_PER_VERTEX / BYTES_PER_FLOAT, color))
+
+    Texture texture1("/storage/emulated/0/Pictures/UHD Wallpapers/_uhdminimal34.jpg", 1, 4,
+                     GL_RGBA);
+    Texture texture2("/storage/emulated/0/texture.png", 0, 3, GL_RGB);
+
+    GLint textures[2] = {0, 1};
+
+    GLCall(GLint textureSamplerLocation = shader.getUniformLocation("textures"))
+    GLCall(shader.setUniform1iv(textureSamplerLocation, textures))
+
+    GLCall(glDrawArrays(GL_TRIANGLES, 0, 6))
+    GLCall(shader.disableVertexAttribPointer(positionHandle))
+    GLCall(shader.disableVertexAttribPointer(colorPositionHandle))
+    GLCall(shader.disableVertexAttribPointer(textureIndexPositionHandle))
+    GLCall(shader.disableVertexAttribPointer(chordsPositionHandle))
+    GLCall(shader.unBind())
+    GLCall(texture1.unBind())
+    GLCall(texture2.unBind())
+    GLCall(vb.unBind())
+}
+
+void rotateModel() {
+    GLCall()
+}
+
 extern "C" {
 void Java_com_demo_opengl_Render_render(JNIEnv *env, jobject object) {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    drawSquare();
-    drawTriangle();
+//    drawSquare();
+//    drawTriangle();
     drawPyramid();
+//    loadMultipleTriangles();
 }
 
 void Java_com_demo_opengl_Render_onSurfaceCreated(JNIEnv *env, jobject object) {
@@ -383,4 +485,8 @@ Java_com_demo_opengl_MainActivity_assetsManager(JNIEnv *env, jobject object,
     readObj("models/pyramid.obj");
 }
 
+void
+Java_com_demo_opengl_GlSurface_touchPoints(JNIEnv *env, jobject object, jfloat x, jfloat y) {
+    rotateModel();
+}
 }

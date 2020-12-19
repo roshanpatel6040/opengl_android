@@ -4,6 +4,10 @@ add_library(opengl
         SHARED
         src/main/cpp/opengl.cpp)
 
+add_library(cameraCpp
+        SHARED
+        src/main/cpp/camera.cpp)
+
 add_library(renderer
         STATIC
         src/main/cpp/core/Renderer.cpp)
@@ -24,12 +28,29 @@ add_library(texture
         STATIC
         src/main/cpp/core/Texture.cpp)
 
+
 include_directories(src/main/cpp/stb_image)
 include_directories(src/main/cpp/glm)
 include_directories(src/main/cpp/core/headers)
 
-find_library(log-lib
-        log)
+find_library(log-lib log)
+find_library(camera-lib camera2ndk)
+find_library(media-lib mediandk)
+
+target_link_libraries( # Specifies the target library.
+        cameraCpp
+        renderer
+        vertexBuffer
+        indexBuffer
+        shader
+        texture
+        android
+        ${log-lib}
+        ${camera-lib}
+        ${media-lib}
+        EGL
+        GLESv2
+        )
 
 target_link_libraries( # Specifies the target library.
         opengl
