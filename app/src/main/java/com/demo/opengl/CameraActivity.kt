@@ -8,6 +8,8 @@ import android.opengl.GLSurfaceView
 import android.os.Bundle
 import android.util.Log
 import android.view.Surface
+import android.view.Window
+import android.view.WindowManager
 import androidx.appcompat.app.AppCompatActivity
 import java.nio.ByteBuffer
 import java.nio.IntBuffer
@@ -20,10 +22,27 @@ class CameraActivity : AppCompatActivity() {
         System.loadLibrary("cameraCpp")
     }
 
+    lateinit var gl: GL
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        window.setFlags(
+            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS)
         initialize()
-        setContentView(GL(this))
+        gl = GL(this)
+        gl.fitsSystemWindows = false
+        setContentView(gl)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        gl.onResume()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        gl.onPause()
     }
 
     override fun onDestroy() {
@@ -72,11 +91,11 @@ class CameraActivity : AppCompatActivity() {
             override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
                 // Prepare texture and surface
                 val textureBuffer = IntArray(1)
-                GLES20.glGenTextures(1, textureBuffer,0)
+                GLES20.glGenTextures(1, textureBuffer, 0)
                 GLES20.glBindTexture(GL_TEXTURE_EXTERNAL_OES, textureBuffer[0])
 
                 surfaceTexture = SurfaceTexture(textureBuffer[0])
-                surfaceTexture.setDefaultBufferSize(640, 480)
+                surfaceTexture.setDefaultBufferSize(1920, 1080)
                 surfaceTexture.setOnFrameAvailableListener {
                     synchronized(lock) {
                         frameAvailable = true
@@ -89,10 +108,16 @@ class CameraActivity : AppCompatActivity() {
                 val surface = Surface(surfaceTexture)
 
                 // Pass to native code
-                onSurfaceCreated(textureBuffer[0], surface)
+                onSurfaceCreated(textureBuffer[0], surface, width, height)
             }
 
-            private external fun onSurfaceCreated(buffer: Int, surface: Surface)
+            private external fun onSurfaceCreated(
+                buffer: Int,
+                surface: Surface,
+                width: Int,
+                height: Int
+            )
+
             private external fun onSurfaceChanged(width: Int, height: Int)
             private external fun onDrawFrame(texMat: FloatArray)
 

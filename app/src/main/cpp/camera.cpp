@@ -44,6 +44,9 @@ using namespace std;
 int windowWidth = 640;
 int windowHeight = 480;
 
+int cameraWidth = 0;
+int cameraHeight = 0;
+
 int textureID;
 GLuint program;
 GLuint arrayBuffer[2];
@@ -267,11 +270,23 @@ void startCamera() {
 //    ACaptureSessionOutputContainer_add(captureSessionOutputContainer, imageOutput);
 
     // Acquire window
-    ANativeWindow_acquire(window);
     camera_status_t outputTargetStatus = ACameraOutputTarget_create(window, &outputTarget);
     Camera(outputTargetStatus)
     camera_status_t addTargetStatus = ACaptureRequest_addTarget(previewRequest, outputTarget);
     Camera(addTargetStatus)
+
+    uint8_t controlMode = ACAMERA_CONTROL_MODE_AUTO;
+    camera_status_t controlModeStatus = ACaptureRequest_setEntry_u8(previewRequest,
+                                                                    ACAMERA_CONTROL_MODE,
+                                                                    1,
+                                                                    &controlMode);
+
+    int32_t orientation = 90;
+    camera_status_t jpegOrientationStatus = ACaptureRequest_setEntry_i32(previewRequest,
+                                                                         ACAMERA_JPEG_ORIENTATION,
+                                                                         1,
+                                                                         &orientation);
+    Camera(controlModeStatus)
 
     // Create capture session
     camera_status_t captureSessionStatus = ACameraDevice_createCaptureSession(cameraDevice,
@@ -287,20 +302,32 @@ void startCamera() {
     Camera(repeatingRequestStatus)
 }
 
+void closeCamera() {
+    ACameraMetadata_free(cameraMetadata);
+    ACaptureRequest_free(previewRequest);
+    ACameraDevice_close(cameraDevice);
+    ACameraCaptureSession_close(session);
+    ACameraManager_delete(cameraManager);
+}
+
 extern "C" {
 void Java_com_demo_opengl_CameraActivity_initialize(JNIEnv *jni, jobject object) {
     cameraManager = ACameraManager_create();
 }
 
 void Java_com_demo_opengl_CameraActivity_destroy(JNIEnv *jni, jobject object) {
-    ACameraManager_delete(cameraManager);
+    closeCamera();
 }
 
 void Java_com_demo_opengl_CameraActivity_00024GL_00024Render_onSurfaceCreated(JNIEnv *jni,
                                                                               jobject object,
                                                                               jint textureId,
-                                                                              jobject surface) {
+                                                                              jobject surface,
+                                                                              jint width,
+                                                                              jint height) {
     textureID = textureId;
+    cameraWidth = width;
+    cameraHeight = height;
 
     float vertices[] = {
             -1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
@@ -320,8 +347,8 @@ void Java_com_demo_opengl_CameraActivity_00024GL_00024Render_onSurfaceCreated(JN
                                    "varying vec2 v_Chord;\n"
                                    "void main()\n"
                                    "{\n"
-                                   "v_Chord = (texMatrix * vec4(texChords.x, texChords.y, 0, 0)).xy;\n"
-                                   "gl_Position = u_MVP * vec4(position,1.0f);\n"
+                                   "v_Chord = (texMatrix * vec4(texChords.x, texChords.y, 0, 1)).xy;\n"
+                                   "gl_Position = vec4(position,1.0f);\n"
                                    "}";
     std::string fragmentShaderCode = "#extension GL_OES_EGL_image_external : require\n"
                                      "uniform vec4 color;\n"
@@ -329,7 +356,7 @@ void Java_com_demo_opengl_CameraActivity_00024GL_00024Render_onSurfaceCreated(JN
                                      "uniform samplerExternalOES texture;\n"
                                      "void main()\n"
                                      "{\n"
-                                     "gl_FragColor = texture2D(texture,v_Chord);\n"
+                                     "gl_FragColor = texture2D(texture,v_Chord) * vec4(0.3f,1.0f,0.1,1.0f);\n"
                                      "}";
 
     GLCall(program = glCreateProgram())
@@ -353,6 +380,8 @@ void Java_com_demo_opengl_CameraActivity_00024GL_00024Render_onSurfaceCreated(JN
 
     // Create window with surface
     window = ANativeWindow_fromSurface(jni, surface);
+    ANativeWindow_acquire(window);
+    ANativeWindow_setBuffersGeometry(window, cameraWidth, cameraHeight, WINDOW_FORMAT_RGBA_8888);
 
     startCamera();
 }
@@ -367,16 +396,17 @@ void Java_com_demo_opengl_CameraActivity_00024GL_00024Render_onSurfaceChanged(JN
 void
 Java_com_demo_opengl_CameraActivity_00024GL_00024Render_onDrawFrame(JNIEnv *jni, jobject object,
                                                                     jfloatArray array) {
+    GLCall(glViewport(0, 0, windowWidth, windowHeight))
     GLCall(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT))
     GLCall(glClearColor(0, 0, 0, 1))
 
     GLCall(glUseProgram(program))
 
     float mvp[] = {
-            1.0f, 0, 0, 0,
-            0, 1.0f, 0, 0,
-            0, 0, 1.0f, 0,
-            0, 0, 0, 1.0f
+            1.0f, 0.0f, 0.0f, 0.0f,
+            0.0f, 1.0f, 0.0f, 0.0f,
+            0.0f, 0.0f, 1.0f, 0.0f,
+            0.0f, 0.0f, 0.0f, 1.0f
     };
 
     float aspect = windowWidth > windowHeight ? float(windowWidth) / float(windowHeight) :
@@ -412,7 +442,6 @@ Java_com_demo_opengl_CameraActivity_00024GL_00024Render_onDrawFrame(JNIEnv *jni,
     GLCall(glVertexAttribPointer(chordsHandle, 2, GL_FLOAT, false, 5 * sizeof(float),
                                  (GLvoid *) (3 * sizeof(float))))
 
-    GLCall(glViewport(0, 0, windowWidth, windowHeight))
     GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE))
     GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE))
 
