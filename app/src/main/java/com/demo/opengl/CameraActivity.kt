@@ -7,6 +7,7 @@ import android.opengl.GLES20
 import android.opengl.GLSurfaceView
 import android.os.Bundle
 import android.util.Log
+import android.view.MotionEvent
 import android.view.Surface
 import android.view.Window
 import android.view.WindowManager
@@ -60,6 +61,21 @@ class CameraActivity : AppCompatActivity() {
             setEGLContextClientVersion(2)
             setRenderer(Render(context))
         }
+
+        override fun onTouchEvent(event: MotionEvent?): Boolean {
+            val index = event?.actionIndex
+            val pointerId = event?.getPointerId(index!!)
+            when (event?.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    capture()
+                }
+                MotionEvent.ACTION_MOVE -> {
+                }
+            }
+            return true
+        }
+
+        private external fun capture()
 
         class Render(context: Context) : Renderer {
 

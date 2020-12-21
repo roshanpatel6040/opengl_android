@@ -119,6 +119,28 @@ static ACameraCaptureSession_stateCallbacks sessionCallbacks = {
         .onClosed = onClosed,
 };
 
+static void onFailed(void *context, ACameraCaptureSession *session,
+                     ACaptureRequest *request, ACameraCaptureFailure *failure) {
+    __android_log_print(ANDROID_LOG_ERROR, "Capture", "failure %i", failure->reason);
+}
+
+static void onCaptureStarted(void *context, ACameraCaptureSession *session,
+                             const ACaptureRequest *request, int64_t timestamp) {
+    __android_log_print(ANDROID_LOG_DEBUG, "Capture", "time %lli", timestamp);
+}
+
+static void onCaptureCompleted(void *context, ACameraCaptureSession *session,
+                               ACaptureRequest *request, const ACameraMetadata *result) {
+    __android_log_print(ANDROID_LOG_DEBUG, "Capture", "%s", "Completed");
+}
+
+static ACameraCaptureSession_captureCallbacks captureCallbacks = {
+        .context = nullptr,
+        .onCaptureFailed = onFailed,
+        .onCaptureStarted = onCaptureStarted,
+        .onCaptureCompleted = onCaptureCompleted,
+};
+
 static void imageCallback(void *context, AImageReader *reader) {
     AImage *image = nullptr;
     auto status = AImageReader_acquireNextImage(reader, &image);
@@ -375,6 +397,15 @@ void Java_com_demo_opengl_CameraActivity_destroy(JNIEnv *jni, jobject object) {
     closeCamera();
 }
 
+extern "C" {
+void Java_com_demo_opengl_CameraActivity_00024GL_capture(JNIEnv *jni, jobject object) {
+    __android_log_print(ANDROID_LOG_DEBUG, "Capture", "%s", "Initiated");
+    camera_status_t captureStatus = ACameraCaptureSession_capture(session, &captureCallbacks, 1,
+                                                                  &previewRequest, nullptr);
+    Camera(captureStatus)
+}
+}
+
 void Java_com_demo_opengl_CameraActivity_00024GL_00024Render_onSurfaceCreated(JNIEnv *jni,
                                                                               jobject object,
                                                                               jint textureId,
@@ -446,7 +477,7 @@ void Java_com_demo_opengl_CameraActivity_00024GL_00024Render_onSurfaceChanged(JN
                                                                               jint height) {
     windowWidth = width;
     windowHeight = height;
-        ANativeWindow_acquire(window);
+    ANativeWindow_acquire(window);
     ANativeWindow_setBuffersGeometry(window, windowWidth, windowHeight, WINDOW_FORMAT_RGBA_8888);
 
 }
