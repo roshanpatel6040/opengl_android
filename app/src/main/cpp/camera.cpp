@@ -166,6 +166,62 @@ ANativeWindow *createSurface(AImageReader *reader) {
     return nativeWindow;
 }
 
+void drawTriangle() {
+    int CHORDS_COLOR_PER_VERTEX = 4;
+    int BYTES_PER_FLOAT = 4;
+    float vertices[] = {
+            //    X    Y     Z     R     G      B    A
+            0.0f, 0.5f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f,
+            -0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f,
+            0.5f, -0.5f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f};
+
+    float color[] = {1.0f, 0.5f, 0.0f, 1.0f};
+
+    // varying field uses to transfer data between vertex and fragment shader
+    std::string vertexShaderCode = "attribute vec4 position;\n"
+                                   "attribute vec4 v_color;\n"
+                                   "varying vec4 f_color;\n" // Passes to fragment shader
+                                   "void main()\n"
+                                   "{\n"
+                                   " f_color = v_color;\n"
+                                   " gl_Position = position;\n"
+                                   "}";
+    std::string fragmentShaderCode = "uniform vec4 color;\n" // Get using uniform location
+                                     "varying vec4 f_color;\n" // Get from vertex shader
+                                     "void main()\n"
+                                     "{\n"
+                                     " gl_FragColor = f_color;\n"
+                                     //                                " gl_FragColor = color;\n"
+                                     "}";
+
+    GLCall(GLuint program = glCreateProgram())
+    GLCall(Shader shader(program, vertexShaderCode, fragmentShaderCode))
+    GLCall(glLinkProgram(program))
+    GLCall(glUseProgram(program))
+
+    GLCall(VertexBuffer vb(vertices, sizeof(vertices)))
+
+    GLCall(GLint positionHandle = shader.getAttributeLocation("position"))
+    GLCall(shader.vertexAttribPointer(positionHandle, GL_FLOAT, 3, 7 * sizeof(float),
+                                      (GLvoid *) nullptr))
+    GLCall(shader.enableVertexAttribArray(positionHandle))
+
+    GLCall(GLuint colorPositionHandle = shader.getAttributeLocation("v_color"))
+    GLCall(shader.vertexAttribPointer(colorPositionHandle, GL_FLOAT, 4, 7 * sizeof(float),
+                                      (GLvoid *) (3 * sizeof(float))))
+    GLCall(shader.enableVertexAttribArray(colorPositionHandle))
+
+    GLCall(int colorHandle = shader.getUniformLocation("color"))
+    GLCall(shader.setUniform4fv(colorHandle,
+                                sizeof(color) / CHORDS_COLOR_PER_VERTEX / BYTES_PER_FLOAT, color))
+
+    GLCall(glDrawArrays(GL_TRIANGLES, 0, 3))
+    GLCall(shader.disableVertexAttribPointer(positionHandle))
+    GLCall(shader.disableVertexAttribPointer(colorPositionHandle))
+    GLCall(shader.unBind())
+    GLCall(vb.unBind())
+}
+
 string getCameraId() {
     ACameraIdList *cameraIds = nullptr;
     ACameraManager_getCameraIdList(cameraManager, &cameraIds);
@@ -347,8 +403,8 @@ void Java_com_demo_opengl_CameraActivity_00024GL_00024Render_onSurfaceCreated(JN
                                    "varying vec2 v_Chord;\n"
                                    "void main()\n"
                                    "{\n"
-                                   "v_Chord = (texMatrix * vec4(texChords.x, texChords.y, 0, 1)).xy;\n"
-                                   "gl_Position = vec4(position,1.0f);\n"
+                                   "v_Chord = (texMatrix * vec4(texChords.x, texChords.y, 0.0, 1.0)).xy;\n"
+                                   "gl_Position = u_MVP * vec4(position,1.0f);\n"
                                    "}";
     std::string fragmentShaderCode = "#extension GL_OES_EGL_image_external : require\n"
                                      "uniform vec4 color;\n"
@@ -356,7 +412,7 @@ void Java_com_demo_opengl_CameraActivity_00024GL_00024Render_onSurfaceCreated(JN
                                      "uniform samplerExternalOES texture;\n"
                                      "void main()\n"
                                      "{\n"
-                                     "gl_FragColor = texture2D(texture,v_Chord) * vec4(0.3f,1.0f,0.1,1.0f);\n"
+                                     "gl_FragColor = texture2D(texture,v_Chord);\n"
                                      "}";
 
     GLCall(program = glCreateProgram())
@@ -380,8 +436,6 @@ void Java_com_demo_opengl_CameraActivity_00024GL_00024Render_onSurfaceCreated(JN
 
     // Create window with surface
     window = ANativeWindow_fromSurface(jni, surface);
-    ANativeWindow_acquire(window);
-    ANativeWindow_setBuffersGeometry(window, cameraWidth, cameraHeight, WINDOW_FORMAT_RGBA_8888);
 
     startCamera();
 }
@@ -392,6 +446,9 @@ void Java_com_demo_opengl_CameraActivity_00024GL_00024Render_onSurfaceChanged(JN
                                                                               jint height) {
     windowWidth = width;
     windowHeight = height;
+        ANativeWindow_acquire(window);
+    ANativeWindow_setBuffersGeometry(window, windowWidth, windowHeight, WINDOW_FORMAT_RGBA_8888);
+
 }
 void
 Java_com_demo_opengl_CameraActivity_00024GL_00024Render_onDrawFrame(JNIEnv *jni, jobject object,
@@ -406,13 +463,13 @@ Java_com_demo_opengl_CameraActivity_00024GL_00024Render_onDrawFrame(JNIEnv *jni,
             1.0f, 0.0f, 0.0f, 0.0f,
             0.0f, 1.0f, 0.0f, 0.0f,
             0.0f, 0.0f, 1.0f, 0.0f,
-            0.0f, 0.0f, 0.0f, 1.0f
+            0.0f, 0.0f, 0.0f, 1.0f,
     };
 
     float aspect = windowWidth > windowHeight ? float(windowWidth) / float(windowHeight) :
                    float(windowHeight) / float(windowWidth);
     if (windowWidth < windowHeight) // portrait
-        ortho(mvp, -1.0f, 1.0f, -aspect, aspect, -1.0f, 1.0f);
+        ortho(mvp, -0.823333f, 0.823333f, -1.0, 1.0, -1.0f, 1.0f);
     else // landscape
         ortho(mvp, -aspect, aspect, -1.0f, 1.0f, -1.0f, 1.0f);
 
@@ -420,8 +477,8 @@ Java_com_demo_opengl_CameraActivity_00024GL_00024Render_onDrawFrame(JNIEnv *jni,
 
     GLCall(glActiveTexture(GL_TEXTURE0))
     GLCall(glBindTexture(GL_TEXTURE_EXTERNAL_OES, textureID))
-//    GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR))
-//    GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR))
+    GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR))
+    GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR))
     GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE))
     GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE))
 

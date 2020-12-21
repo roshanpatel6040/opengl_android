@@ -28,7 +28,8 @@ class CameraActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         window.setFlags(
             WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS)
+            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+        )
         initialize()
         gl = GL(this)
         gl.fitsSystemWindows = false
@@ -69,6 +70,8 @@ class CameraActivity : AppCompatActivity() {
             private var frameAvailable: Boolean = false
             private val lock = Object()
 
+            private val cameraWidth = 1920
+            private val cameraHeight = 1080
             private val width = context.resources.displayMetrics.widthPixels
             private val height = context.resources.displayMetrics.heightPixels
 
@@ -95,7 +98,7 @@ class CameraActivity : AppCompatActivity() {
                 GLES20.glBindTexture(GL_TEXTURE_EXTERNAL_OES, textureBuffer[0])
 
                 surfaceTexture = SurfaceTexture(textureBuffer[0])
-                surfaceTexture.setDefaultBufferSize(1920, 1080)
+                surfaceTexture.setDefaultBufferSize(cameraWidth, cameraHeight)
                 surfaceTexture.setOnFrameAvailableListener {
                     synchronized(lock) {
                         frameAvailable = true
@@ -108,7 +111,7 @@ class CameraActivity : AppCompatActivity() {
                 val surface = Surface(surfaceTexture)
 
                 // Pass to native code
-                onSurfaceCreated(textureBuffer[0], surface, width, height)
+                onSurfaceCreated(textureBuffer[0], surface, cameraWidth, cameraHeight)
             }
 
             private external fun onSurfaceCreated(

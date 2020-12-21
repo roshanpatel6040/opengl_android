@@ -14,4 +14,17 @@ class ExampleUnitTest {
     fun addition_isCorrect() {
         assertEquals(4, 2 + 2)
     }
+
+    @Test
+    fun test(){
+        val ww = 1080
+        val wh = 2340
+        val cw = 1920
+        val ch = 1080
+
+        val war = wh.toFloat() / ww.toFloat()
+        val car = ch.toFloat() / cw.toFloat()
+
+        print("${war} $car")
+    }
 }
