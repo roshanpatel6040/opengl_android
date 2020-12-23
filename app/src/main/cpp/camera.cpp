@@ -49,12 +49,14 @@ int cameraHeight = 0;
 
 int textureID;
 GLuint program;
+GLuint triangleProgram;
 GLuint arrayBuffer[2];
 GLuint positionHandle;
 GLuint mvpLocation;
 GLuint matrixLocation;
 GLuint textureLocation;
 GLuint chordsHandle;
+GLuint saturationLocation;
 
 ACameraManager *cameraManager;
 ACameraDevice *cameraDevice;
@@ -193,7 +195,7 @@ void drawTriangle() {
     int BYTES_PER_FLOAT = 4;
     float vertices[] = {
             //    X    Y     Z     R     G      B    A
-            0.0f, 0.5f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f,
+            0.0f, 0.5f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f,
             -0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f,
             0.5f, -0.5f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f};
 
@@ -216,10 +218,10 @@ void drawTriangle() {
                                      //                                " gl_FragColor = color;\n"
                                      "}";
 
-    GLCall(GLuint program = glCreateProgram())
-    GLCall(Shader shader(program, vertexShaderCode, fragmentShaderCode))
-    GLCall(glLinkProgram(program))
-    GLCall(glUseProgram(program))
+    GLCall(triangleProgram = glCreateProgram())
+    GLCall(Shader shader(triangleProgram, vertexShaderCode, fragmentShaderCode))
+    GLCall(glLinkProgram(triangleProgram))
+    GLCall(glUseProgram(triangleProgram))
 
     GLCall(VertexBuffer vb(vertices, sizeof(vertices)))
 
@@ -347,7 +349,6 @@ void startCamera() {
 //    ACaptureSessionOutput_create(imageWindow, &imageOutput);
 //    ACaptureSessionOutputContainer_add(captureSessionOutputContainer, imageOutput);
 
-    // Acquire window
     camera_status_t outputTargetStatus = ACameraOutputTarget_create(window, &outputTarget);
     Camera(outputTargetStatus)
     camera_status_t addTargetStatus = ACaptureRequest_addTarget(previewRequest, outputTarget);
@@ -358,13 +359,30 @@ void startCamera() {
                                                                     ACAMERA_CONTROL_MODE,
                                                                     1,
                                                                     &controlMode);
+    Camera(controlModeStatus)
+
+//    uint8_t  controlAfMode = {ACAMERA_CONTROL_AF_MODE_AUTO};
+//    camera_status_t controlModeAFStatus = ACaptureRequest_setEntry_u8(previewRequest,
+//                                                                    ACAMERA_CONTROL_AF_MODE,
+//                                                                    1,
+//                                                                    &controlAfMode);
+//    Camera(controlAfMode)
+//    uint8_t controlAWBMode = ACAMERA_CONTROL_AWB_MODE_AUTO;
+//    camera_status_t controlModeAWBStatus = ACaptureRequest_setEntry_u8(previewRequest,
+//                                                                    ACAMERA_CONTROL_AWB_MODE,
+//                                                                    1,
+//                                                                    &controlAWBMode);
+//    Camera(controlAWBMode)
 
     int32_t orientation = 90;
     camera_status_t jpegOrientationStatus = ACaptureRequest_setEntry_i32(previewRequest,
                                                                          ACAMERA_JPEG_ORIENTATION,
                                                                          1,
                                                                          &orientation);
-    Camera(controlModeStatus)
+
+    const int32_t sensor = {800};
+    camera_status_t sensorStatus = ACaptureRequest_setEntry_i32(previewRequest, ACAMERA_SENSOR_SENSITIVITY, 1, &sensor);
+    Camera(sensorStatus)
 
     // Create capture session
     camera_status_t captureSessionStatus = ACameraDevice_createCaptureSession(cameraDevice,
@@ -441,9 +459,37 @@ void Java_com_demo_opengl_CameraActivity_00024GL_00024Render_onSurfaceCreated(JN
                                      "uniform vec4 color;\n"
                                      "varying vec2 v_Chord;\n"
                                      "uniform samplerExternalOES texture;\n"
+                                     "uniform float u_saturation;\n"
+                                     "const float Epsilon = 1e-10;\n"
+                                     " \n"
+                                     "vec3 RGBtoHSV(in vec3 RGB)\n"
+                                     " {\n"
+                                     "        vec4  P   = (RGB.g < RGB.b) ? vec4(RGB.bg, -1.0, 2.0/3.0) : vec4(RGB.gb, 0.0, -1.0/3.0);\n"
+                                     "        vec4  Q   = (RGB.r < P.x) ? vec4(P.xyw, RGB.r) : vec4(RGB.r, P.yzx);\n"
+                                     "        float C   = Q.x - min(Q.w, Q.y);\n"
+                                     "        float H   = abs((Q.w - Q.y) / (6.0 * C + Epsilon) + Q.z);\n"
+                                     "        vec3  HCV = vec3(H, C, Q.x);\n"
+                                     "        float S   = HCV.y / (HCV.z + Epsilon);\n"
+                                     "        return vec3(HCV.x, S, HCV.z);\n"
+                                     " }\n"
+                                     "// Convert hsv to rgb \n"
+                                     " vec3 HSVtoRGB(in vec3 HSV)\n"
+                                     " {\n"
+                                     "        float H   = HSV.x;\n"
+                                     "        float R   = abs(H * 6.0 - 3.0) - 1.0;\n"
+                                     "        float G   = 2.0 - abs(H * 6.0 - 2.0);\n"
+                                     "        float B   = 2.0 - abs(H * 6.0 - 4.0);\n"
+                                     "        vec3  RGB = clamp( vec3(R,G,B), 0.0, 1.0 );\n"
+                                     "        return ((RGB - 1.0) * HSV.y + 1.0) * HSV.z;\n"
+                                     "}\n"
                                      "void main()\n"
                                      "{\n"
-                                     "gl_FragColor = texture2D(texture,v_Chord);\n"
+                                     "vec4 frag = texture2D(texture,v_Chord,0.0f);\n"
+                                     "vec3 color = frag.xyz;\n"
+                                     "vec3 col_hsv = RGBtoHSV(color.rgb);\n"
+                                     "col_hsv.y *= (u_saturation * 2.0); \n"
+                                     "vec3 col_rgb = HSVtoRGB(col_hsv.rgb);\n"
+                                     "gl_FragColor = vec4( col_rgb.rgb, 1.0);\n"
                                      "}";
 
     GLCall(program = glCreateProgram())
@@ -463,6 +509,7 @@ void Java_com_demo_opengl_CameraActivity_00024GL_00024Render_onSurfaceCreated(JN
     GLCall(mvpLocation = glGetUniformLocation(program, "u_MVP"))
     GLCall(matrixLocation = glGetUniformLocation(program, "texMatrix"))
     GLCall(textureLocation = glGetUniformLocation(program, "texture"))
+    GLCall(saturationLocation = glGetUniformLocation(program, "u_saturation"))
 
 
     // Create window with surface
@@ -483,7 +530,8 @@ void Java_com_demo_opengl_CameraActivity_00024GL_00024Render_onSurfaceChanged(JN
 }
 void
 Java_com_demo_opengl_CameraActivity_00024GL_00024Render_onDrawFrame(JNIEnv *jni, jobject object,
-                                                                    jfloatArray array) {
+                                                                    jfloatArray array,
+                                                                    jfloat saturation) {
     GLCall(glViewport(0, 0, windowWidth, windowHeight))
     GLCall(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT))
     GLCall(glClearColor(0, 0, 0, 1))
@@ -519,6 +567,8 @@ Java_com_demo_opengl_CameraActivity_00024GL_00024Render_onDrawFrame(JNIEnv *jni,
     jni->ReleaseFloatArrayElements(array, tm, 0);
 
     GLCall(glUniform1i(textureLocation, 0))
+
+    GLCall(glUniform1f(saturationLocation, saturation))
 
     GLCall(glBindBuffer(GL_ARRAY_BUFFER, arrayBuffer[0]))
     GLCall(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, arrayBuffer[1]))

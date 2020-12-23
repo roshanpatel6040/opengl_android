@@ -7,17 +7,16 @@ import android.opengl.GLES20
 import android.opengl.GLSurfaceView
 import android.os.Bundle
 import android.util.Log
-import android.view.MotionEvent
-import android.view.Surface
-import android.view.Window
-import android.view.WindowManager
+import android.view.*
+import android.widget.FrameLayout
+import android.widget.SeekBar
 import androidx.appcompat.app.AppCompatActivity
 import java.nio.ByteBuffer
 import java.nio.IntBuffer
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
 
-class CameraActivity : AppCompatActivity() {
+class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener {
 
     init {
         System.loadLibrary("cameraCpp")
@@ -31,10 +30,25 @@ class CameraActivity : AppCompatActivity() {
             WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
         )
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         initialize()
         gl = GL(this)
         gl.fitsSystemWindows = false
-        setContentView(gl)
+        val frameLayout = FrameLayout(this)
+        frameLayout.addView(gl)
+        val seekBar = SeekBar(this)
+        seekBar.max = 10
+        seekBar.min = 0
+        seekBar.progress = 5
+        val layoutParams = FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT
+        )
+        layoutParams.gravity = Gravity.BOTTOM
+        seekBar.layoutParams = layoutParams
+        seekBar.setOnSeekBarChangeListener(this)
+        frameLayout.addView(seekBar)
+        setContentView(frameLayout)
     }
 
     override fun onResume() {
@@ -57,9 +71,15 @@ class CameraActivity : AppCompatActivity() {
 
     class GL @JvmOverloads constructor(context: Context) : GLSurfaceView(context) {
 
+        private var renderer = Render(context)
+
         init {
             setEGLContextClientVersion(2)
-            setRenderer(Render(context))
+            setRenderer(renderer)
+        }
+
+        fun changeSaturation(value: Float) {
+            renderer.changeSaturation(value)
         }
 
         override fun onTouchEvent(event: MotionEvent?): Boolean {
@@ -86,6 +106,7 @@ class CameraActivity : AppCompatActivity() {
             private var frameAvailable: Boolean = false
             private val lock = Object()
 
+            private var saturation = 0.5f
             private val cameraWidth = 1920
             private val cameraHeight = 1080
             private val width = context.resources.displayMetrics.widthPixels
@@ -100,7 +121,7 @@ class CameraActivity : AppCompatActivity() {
                     }
                 }
 
-                onDrawFrame(texMatrix)
+                onDrawFrame(texMatrix, saturation)
             }
 
             override fun onSurfaceChanged(gl: GL10?, width: Int, height: Int) {
@@ -137,9 +158,24 @@ class CameraActivity : AppCompatActivity() {
                 height: Int
             )
 
+
+            fun changeSaturation(value: Float) {
+                saturation = value
+            }
+
             private external fun onSurfaceChanged(width: Int, height: Int)
-            private external fun onDrawFrame(texMat: FloatArray)
+            private external fun onDrawFrame(texMat: FloatArray, saturation: Float)
 
         }
+    }
+
+    override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+        gl.changeSaturation(progress.div(10.0f))
+    }
+
+    override fun onStartTrackingTouch(seekBar: SeekBar?) {
+    }
+
+    override fun onStopTrackingTouch(seekBar: SeekBar?) {
     }
 }
