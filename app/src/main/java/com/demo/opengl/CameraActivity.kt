@@ -6,23 +6,30 @@ import android.opengl.GLES11Ext.GL_TEXTURE_EXTERNAL_OES
 import android.opengl.GLES20
 import android.opengl.GLSurfaceView
 import android.os.Bundle
-import android.util.Log
-import android.view.*
+import android.view.Gravity
+import android.view.MotionEvent
+import android.view.Surface
+import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.SeekBar
 import androidx.appcompat.app.AppCompatActivity
-import java.nio.ByteBuffer
-import java.nio.IntBuffer
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
 
 class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener {
+
+    companion object {
+        private const val BRIGHTNESS = "C_B"
+        private const val CONTRAST = "C_C"
+        private const val SATURATION = "C_S"
+    }
 
     init {
         System.loadLibrary("cameraCpp")
     }
 
     lateinit var gl: GL
+    lateinit var frameLayout: FrameLayout
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -34,21 +41,31 @@ class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener {
         initialize()
         gl = GL(this)
         gl.fitsSystemWindows = false
-        val frameLayout = FrameLayout(this)
+        frameLayout = FrameLayout(this)
         frameLayout.addView(gl)
+
+        addSeekBar(SATURATION, 5, 0, 10, 0)
+        addSeekBar(CONTRAST, 10, 0, 20, 150)
+        addSeekBar(BRIGHTNESS, 5, 0, 10, 300)
+
+        setContentView(frameLayout)
+    }
+
+    private fun addSeekBar(tag: String, progress: Int, min: Int, max: Int, margin: Int) {
         val seekBar = SeekBar(this)
-        seekBar.max = 10
-        seekBar.min = 0
-        seekBar.progress = 5
+        seekBar.max = max
+        seekBar.min = min
+        seekBar.progress = progress
+        seekBar.tag = tag
         val layoutParams = FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,
             FrameLayout.LayoutParams.WRAP_CONTENT
         )
+        layoutParams.setMargins(10, 10, 10, 10 + margin)
         layoutParams.gravity = Gravity.BOTTOM
         seekBar.layoutParams = layoutParams
         seekBar.setOnSeekBarChangeListener(this)
         frameLayout.addView(seekBar)
-        setContentView(frameLayout)
     }
 
     override fun onResume() {
@@ -82,6 +99,14 @@ class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener {
             renderer.changeSaturation(value)
         }
 
+        fun changeContrast(value: Float) {
+            renderer.changeContrast(value)
+        }
+
+        fun changeBrightness(value: Float) {
+            renderer.changeBrightness(value)
+        }
+
         override fun onTouchEvent(event: MotionEvent?): Boolean {
             val index = event?.actionIndex
             val pointerId = event?.getPointerId(index!!)
@@ -106,7 +131,11 @@ class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener {
             private var frameAvailable: Boolean = false
             private val lock = Object()
 
+            // Camera filter parameter values
             private var saturation = 0.5f
+            private var contrast = 1.0f
+            private var brightness = 0.0f
+
             private val cameraWidth = 1920
             private val cameraHeight = 1080
             private val width = context.resources.displayMetrics.widthPixels
@@ -121,7 +150,7 @@ class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener {
                     }
                 }
 
-                onDrawFrame(texMatrix, saturation)
+                onDrawFrame(texMatrix, saturation, contrast, brightness)
             }
 
             override fun onSurfaceChanged(gl: GL10?, width: Int, height: Int) {
@@ -163,14 +192,37 @@ class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener {
                 saturation = value
             }
 
+            fun changeContrast(value: Float) {
+                contrast = value
+            }
+
+            fun changeBrightness(value: Float) {
+                brightness = value
+            }
+
             private external fun onSurfaceChanged(width: Int, height: Int)
-            private external fun onDrawFrame(texMat: FloatArray, saturation: Float)
+            private external fun onDrawFrame(
+                texMat: FloatArray,
+                saturation: Float,
+                contrast: Float,
+                brightness: Float
+            )
 
         }
     }
 
     override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-        gl.changeSaturation(progress.div(10.0f))
+        when (seekBar?.tag) {
+            SATURATION -> {
+                gl.changeSaturation(progress.div(10.0f))
+            }
+            CONTRAST -> {
+                gl.changeContrast(progress.div(10.0f))
+            }
+            BRIGHTNESS -> {
+                gl.changeBrightness(progress.div(10.0f).minus(0.5f))
+            }
+        }
     }
 
     override fun onStartTrackingTouch(seekBar: SeekBar?) {

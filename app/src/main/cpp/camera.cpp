@@ -57,6 +57,8 @@ GLuint matrixLocation;
 GLuint textureLocation;
 GLuint chordsHandle;
 GLuint saturationLocation;
+GLuint contrastLocation;
+GLuint brightnessLocation;
 
 ACameraManager *cameraManager;
 ACameraDevice *cameraDevice;
@@ -288,6 +290,9 @@ void cameraDetails(std::string cameraId) {
     int32_t minSensitivity = entry.data.i32[0];
     int32_t maxSensitivity = entry.data.i32[1];
 
+    __android_log_print(ANDROID_LOG_DEBUG, "Camera sensitivity", "%i to %i", minSensitivity,
+                        maxSensitivity);
+
     // JPEG format
     ACameraMetadata_getConstEntry(cameraMetadata,
                                   ACAMERA_SCALER_AVAILABLE_STREAM_CONFIGURATIONS, &entry);
@@ -309,6 +314,14 @@ void cameraDetails(std::string cameraId) {
                                   ACAMERA_SENSOR_ORIENTATION, &entry);
 
     int32_t orientation = entry.data.i32[0];
+
+//    const uint32_t **allTags;
+//    int32_t count;
+//    ACameraMetadata_getAllTags(cameraMetadata, &count, allTags);
+
+//    for (int i = 0; i < sizeof(allTags); ++i) {
+//        __android_log_print(ANDROID_LOG_DEBUG, "All tags", "%i", allTags[i]);
+//    }
 }
 
 void startCamera() {
@@ -361,18 +374,26 @@ void startCamera() {
                                                                     &controlMode);
     Camera(controlModeStatus)
 
-//    uint8_t  controlAfMode = {ACAMERA_CONTROL_AF_MODE_AUTO};
-//    camera_status_t controlModeAFStatus = ACaptureRequest_setEntry_u8(previewRequest,
-//                                                                    ACAMERA_CONTROL_AF_MODE,
-//                                                                    1,
-//                                                                    &controlAfMode);
-//    Camera(controlAfMode)
-//    uint8_t controlAWBMode = ACAMERA_CONTROL_AWB_MODE_AUTO;
-//    camera_status_t controlModeAWBStatus = ACaptureRequest_setEntry_u8(previewRequest,
-//                                                                    ACAMERA_CONTROL_AWB_MODE,
-//                                                                    1,
-//                                                                    &controlAWBMode);
-//    Camera(controlAWBMode)
+    uint8_t controlAfMode = ACAMERA_CONTROL_AF_MODE_AUTO;
+    camera_status_t controlModeAFStatus = ACaptureRequest_setEntry_u8(previewRequest,
+                                                                      ACAMERA_CONTROL_AF_MODE,
+                                                                      1,
+                                                                      &controlAfMode);
+    Camera(controlModeAFStatus)
+
+    uint8_t controlAWBMode = ACAMERA_CONTROL_AWB_MODE_AUTO;
+    camera_status_t controlModeAWBStatus = ACaptureRequest_setEntry_u8(previewRequest,
+                                                                       ACAMERA_CONTROL_AWB_MODE,
+                                                                       1,
+                                                                       &controlAWBMode);
+    Camera(controlModeAWBStatus)
+
+    uint8_t controlAEMode = ACAMERA_CONTROL_AE_MODE_ON;
+    camera_status_t controlModeAEStatus = ACaptureRequest_setEntry_u8(previewRequest,
+                                                                      ACAMERA_CONTROL_AE_MODE,
+                                                                      1,
+                                                                      &controlAEMode);
+    Camera(controlModeAEStatus)
 
     int32_t orientation = 90;
     camera_status_t jpegOrientationStatus = ACaptureRequest_setEntry_i32(previewRequest,
@@ -380,8 +401,10 @@ void startCamera() {
                                                                          1,
                                                                          &orientation);
 
-    const int32_t sensor = {800};
-    camera_status_t sensorStatus = ACaptureRequest_setEntry_i32(previewRequest, ACAMERA_SENSOR_SENSITIVITY, 1, &sensor);
+    const int32_t sensor = 800;
+    camera_status_t sensorStatus = ACaptureRequest_setEntry_i32(previewRequest,
+                                                                ACAMERA_SENSOR_SENSITIVITY, 1,
+                                                                &sensor);
     Camera(sensorStatus)
 
     // Create capture session
@@ -460,8 +483,11 @@ void Java_com_demo_opengl_CameraActivity_00024GL_00024Render_onSurfaceCreated(JN
                                      "varying vec2 v_Chord;\n"
                                      "uniform samplerExternalOES texture;\n"
                                      "uniform float u_saturation;\n"
+                                     "uniform float u_contrast;\n"
+                                     "uniform float u_brightness;\n"
                                      "const float Epsilon = 1e-10;\n"
-                                     " \n"
+                                     "\n"
+                                     "// ***** Rgb to hsv ***** \n"
                                      "vec3 RGBtoHSV(in vec3 RGB)\n"
                                      " {\n"
                                      "        vec4  P   = (RGB.g < RGB.b) ? vec4(RGB.bg, -1.0, 2.0/3.0) : vec4(RGB.gb, 0.0, -1.0/3.0);\n"
@@ -472,7 +498,8 @@ void Java_com_demo_opengl_CameraActivity_00024GL_00024Render_onSurfaceCreated(JN
                                      "        float S   = HCV.y / (HCV.z + Epsilon);\n"
                                      "        return vec3(HCV.x, S, HCV.z);\n"
                                      " }\n"
-                                     "// Convert hsv to rgb \n"
+                                     "// ***** Hsv to rgb ***** \n"
+                                     "\n"
                                      " vec3 HSVtoRGB(in vec3 HSV)\n"
                                      " {\n"
                                      "        float H   = HSV.x;\n"
@@ -482,6 +509,21 @@ void Java_com_demo_opengl_CameraActivity_00024GL_00024Render_onSurfaceCreated(JN
                                      "        vec3  RGB = clamp( vec3(R,G,B), 0.0, 1.0 );\n"
                                      "        return ((RGB - 1.0) * HSV.y + 1.0) * HSV.z;\n"
                                      "}\n"
+                                     "\n"
+                                     "// ***** Brightness ***** \n"
+                                     "vec4 brightness(vec4 color,float brightness)\n"
+                                     "{\n"
+                                     "        vec4 transformedColor = vec4(color.rgb + brightness,1.0);\n"
+                                     "        return clamp(transformedColor,0.0,1.0);\n"
+                                     "}\n"
+                                     "// ***** Contrast ***** \n"
+                                     "vec4 contrast(vec4 color,float contrast)\n"
+                                     "{\n"
+                                     "        vec4 contrastColor = vec4(((color.rgb-vec3(0.5))*contrast)+vec3(0.5), 1.0);\n"
+                                     "        return clamp(contrastColor,0.0,1.0);\n"
+                                     "}\n"
+                                     "\n"
+                                     "\n"
                                      "void main()\n"
                                      "{\n"
                                      "vec4 frag = texture2D(texture,v_Chord,0.0f);\n"
@@ -489,7 +531,9 @@ void Java_com_demo_opengl_CameraActivity_00024GL_00024Render_onSurfaceCreated(JN
                                      "vec3 col_hsv = RGBtoHSV(color.rgb);\n"
                                      "col_hsv.y *= (u_saturation * 2.0); \n"
                                      "vec3 col_rgb = HSVtoRGB(col_hsv.rgb);\n"
-                                     "gl_FragColor = vec4( col_rgb.rgb, 1.0);\n"
+                                     "vec4 final = vec4(col_rgb.rgb,1.0);\n"
+                                     "vec4 contrast = contrast(final,u_contrast);\n"
+                                     "gl_FragColor = brightness(contrast,u_brightness);\n"
                                      "}";
 
     GLCall(program = glCreateProgram())
@@ -510,6 +554,8 @@ void Java_com_demo_opengl_CameraActivity_00024GL_00024Render_onSurfaceCreated(JN
     GLCall(matrixLocation = glGetUniformLocation(program, "texMatrix"))
     GLCall(textureLocation = glGetUniformLocation(program, "texture"))
     GLCall(saturationLocation = glGetUniformLocation(program, "u_saturation"))
+    GLCall(contrastLocation = glGetUniformLocation(program, "u_contrast"))
+    GLCall(brightnessLocation = glGetUniformLocation(program, "u_brightness"))
 
 
     // Create window with surface
@@ -531,7 +577,9 @@ void Java_com_demo_opengl_CameraActivity_00024GL_00024Render_onSurfaceChanged(JN
 void
 Java_com_demo_opengl_CameraActivity_00024GL_00024Render_onDrawFrame(JNIEnv *jni, jobject object,
                                                                     jfloatArray array,
-                                                                    jfloat saturation) {
+                                                                    jfloat saturation,
+                                                                    jfloat contrast,
+                                                                    jfloat brightness) {
     GLCall(glViewport(0, 0, windowWidth, windowHeight))
     GLCall(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT))
     GLCall(glClearColor(0, 0, 0, 1))
@@ -569,6 +617,8 @@ Java_com_demo_opengl_CameraActivity_00024GL_00024Render_onDrawFrame(JNIEnv *jni,
     GLCall(glUniform1i(textureLocation, 0))
 
     GLCall(glUniform1f(saturationLocation, saturation))
+    GLCall(glUniform1f(contrastLocation, contrast))
+    GLCall(glUniform1f(brightnessLocation, brightness))
 
     GLCall(glBindBuffer(GL_ARRAY_BUFFER, arrayBuffer[0]))
     GLCall(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, arrayBuffer[1]))
