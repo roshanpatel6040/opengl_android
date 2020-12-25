@@ -15,6 +15,9 @@
 #include <iostream>
 #include <cassert>
 #include "stb_image/stb_image.cpp"
+#include "GLES3/gl32.h"
+#include "GLES3/gl3platform.h"
+#include "GLES3/gl3.h"
 #include "glm/glm.hpp"
 #include "glm/ext.hpp"
 #include <android/asset_manager_jni.h>
@@ -307,6 +310,8 @@ void cameraDetails(std::string cameraId) {
         if (format == AIMAGE_FORMAT_JPEG) {
             int32_t width = entry.data.i32[i + 1];
             int32_t height = entry.data.i32[i + 2];
+            __android_log_print(ANDROID_LOG_DEBUG, "Camera size", "width: %i, height: %i", width,
+                                height);
         }
     }
 
@@ -314,14 +319,64 @@ void cameraDetails(std::string cameraId) {
                                   ACAMERA_SENSOR_ORIENTATION, &entry);
 
     int32_t orientation = entry.data.i32[0];
+}
 
-//    const uint32_t **allTags;
-//    int32_t count;
-//    ACameraMetadata_getAllTags(cameraMetadata, &count, allTags);
+void createEglContext(JNIEnv *env, jobject surface) {
+    static EGLint const attribute_list[] =
+            {
+                    EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
+                    EGL_RED_SIZE, 8,
+                    EGL_GREEN_SIZE, 8,
+                    EGL_BLUE_SIZE, 8,
+                    EGL_DEPTH_SIZE, 16,
+                    EGL_STENCIL_SIZE, 8,
+                    EGL_NONE};
 
-//    for (int i = 0; i < sizeof(allTags); ++i) {
-//        __android_log_print(ANDROID_LOG_DEBUG, "All tags", "%i", allTags[i]);
-//    }
+    static EGLint const context_list[] =
+            {EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE};
+
+    EGLDisplay eglDisplay;
+    EGLConfig eglConfig;
+    EGLContext eglContext;
+    EGLSurface eglSurface;
+    NativeWindowType windowType;
+    EGLint numConfig;
+
+    EGLBoolean bind = eglBindAPI(EGL_OPENGL_ES_API);
+    __android_log_print(ANDROID_LOG_ERROR, "Egl Bind", "%u", bind);
+    // Get egl display connection
+    EGLCall(eglDisplay = eglGetDisplay(EGL_DEFAULT_DISPLAY))
+    // Initialize eglDisplay
+    EGLCall(eglInitialize(eglDisplay, nullptr, nullptr))
+    EGLCall(eglChooseConfig(eglDisplay, attribute_list, &eglConfig, 1, &numConfig))
+    EGLCall(eglContext = eglCreateContext(eglDisplay, eglConfig, EGL_NO_CONTEXT, context_list))
+    if (eglContext == nullptr) {
+        __android_log_print(ANDROID_LOG_ERROR, "Egl error", "%s", "No context");
+    }
+    window = ANativeWindow_fromSurface(env, surface);
+    EGLCall(eglSurface = eglCreateWindowSurface(eglDisplay, eglConfig, window, nullptr))
+    if (eglSurface == EGL_NO_SURFACE) {
+        __android_log_print(ANDROID_LOG_ERROR, "Egl error", "%s", "Unable to create surface");
+        int error = eglGetError();
+        switch (error) {
+            case EGL_BAD_CONFIG:
+                __android_log_print(ANDROID_LOG_ERROR, "Egl error", "%s", "Bad config");
+                break;
+            case EGL_BAD_NATIVE_WINDOW:
+                __android_log_print(ANDROID_LOG_ERROR, "Egl error", "%s", "Bad window");
+                break;
+            case EGL_BAD_ALLOC:
+                __android_log_print(ANDROID_LOG_ERROR, "Egl error", "%s", "Bad allocation");
+                break;
+        }
+        return;
+    }
+    EGLCall(eglMakeCurrent(eglDisplay, eglSurface, eglSurface, eglContext))
+
+//    GLCall(glClearColor(1.0, 1.0, 0.0, 1.0))
+//    GLCall(glClear(GL_COLOR_BUFFER_BIT))
+//    GLCall(glFlush())
+//    EGLCall(eglSwapBuffers(eglDisplay, surface))
 }
 
 void startCamera() {
@@ -367,7 +422,7 @@ void startCamera() {
     camera_status_t addTargetStatus = ACaptureRequest_addTarget(previewRequest, outputTarget);
     Camera(addTargetStatus)
 
-    uint8_t controlMode = ACAMERA_CONTROL_MODE_AUTO;
+    uint8_t controlMode = ACAMERA_CONTROL_MODE_OFF;
     camera_status_t controlModeStatus = ACaptureRequest_setEntry_u8(previewRequest,
                                                                     ACAMERA_CONTROL_MODE,
                                                                     1,
@@ -388,7 +443,7 @@ void startCamera() {
                                                                        &controlAWBMode);
     Camera(controlModeAWBStatus)
 
-    uint8_t controlAEMode = ACAMERA_CONTROL_AE_MODE_ON;
+    uint8_t controlAEMode = ACAMERA_CONTROL_AE_MODE_OFF;
     camera_status_t controlModeAEStatus = ACaptureRequest_setEntry_u8(previewRequest,
                                                                       ACAMERA_CONTROL_AE_MODE,
                                                                       1,
@@ -406,6 +461,30 @@ void startCamera() {
                                                                 ACAMERA_SENSOR_SENSITIVITY, 1,
                                                                 &sensor);
     Camera(sensorStatus)
+
+    int64_t sensorExposureTime = 10000000;
+    camera_status_t expTimeStatus = ACaptureRequest_setEntry_i64(previewRequest,
+                                                                ACAMERA_SENSOR_EXPOSURE_TIME, 1,
+                                                                &sensorExposureTime);
+    Camera(expTimeStatus)
+
+    int64_t frameDurationTime = 30000000;
+    camera_status_t frameDurationStatus = ACaptureRequest_setEntry_i64(previewRequest,
+                                                                 ACAMERA_SENSOR_FRAME_DURATION, 1,
+                                                                 &frameDurationTime);
+    Camera(frameDurationStatus)
+
+
+    float lensAperture = 1.5;
+    camera_status_t lensApertureStatus = ACaptureRequest_setEntry_float(previewRequest,
+                                                                       ACAMERA_LENS_APERTURE, 1,
+                                                                 &lensAperture);
+    Camera(lensApertureStatus)
+
+
+//    const uint8_t noiseMode = ACAMERA_NOISE_REDUCTION_MODE_HIGH_QUALITY;
+//    camera_status_t noiseReductionStatus = ACaptureRequest_setEntry_u8(previewRequest, ACAMERA_NOISE_REDUCTION_MODE, 1, &noiseMode);
+//    Camera(noiseReductionStatus)
 
     // Create capture session
     camera_status_t captureSessionStatus = ACameraDevice_createCaptureSession(cameraDevice,
@@ -457,6 +536,10 @@ void Java_com_demo_opengl_CameraActivity_00024GL_00024Render_onSurfaceCreated(JN
     cameraWidth = width;
     cameraHeight = height;
 
+    // Create window with surface
+    window = ANativeWindow_fromSurface(jni, surface);
+//    createEglContext(jni, surface);
+
     float vertices[] = {
             -1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
             -1.0, 1.0f, 0.0f, 0.0f, 1.0f,
@@ -476,11 +559,12 @@ void Java_com_demo_opengl_CameraActivity_00024GL_00024Render_onSurfaceCreated(JN
                                    "void main()\n"
                                    "{\n"
                                    "v_Chord = (texMatrix * vec4(texChords.x, texChords.y, 0.0, 1.0)).xy;\n"
-                                   "gl_Position = u_MVP * vec4(position,1.0f);\n"
+                                   "gl_Position = u_MVP * vec4(position,1.0);\n"
                                    "}";
     std::string fragmentShaderCode = "#extension GL_OES_EGL_image_external : require\n"
-                                     "uniform vec4 color;\n"
-                                     "varying vec2 v_Chord;\n"
+                                     "precision highp float;\n"
+                                     "uniform highp vec4 color;\n"
+                                     "varying lowp vec2 v_Chord;\n"
                                      "uniform samplerExternalOES texture;\n"
                                      "uniform float u_saturation;\n"
                                      "uniform float u_contrast;\n"
@@ -526,7 +610,7 @@ void Java_com_demo_opengl_CameraActivity_00024GL_00024Render_onSurfaceCreated(JN
                                      "\n"
                                      "void main()\n"
                                      "{\n"
-                                     "vec4 frag = texture2D(texture,v_Chord,0.0f);\n"
+                                     "vec4 frag = texture2D(texture,v_Chord);\n"
                                      "vec3 color = frag.xyz;\n"
                                      "vec3 col_hsv = RGBtoHSV(color.rgb);\n"
                                      "col_hsv.y *= (u_saturation * 2.0); \n"
@@ -535,10 +619,29 @@ void Java_com_demo_opengl_CameraActivity_00024GL_00024Render_onSurfaceCreated(JN
                                      "vec4 contrast = contrast(final,u_contrast);\n"
                                      "gl_FragColor = brightness(contrast,u_brightness);\n"
                                      "}";
-
+    __android_log_print(ANDROID_LOG_ERROR, "OpenGL version", "%s", glGetString(GL_VERSION));
+    __android_log_print(ANDROID_LOG_ERROR, "OpenGL shader version", "%s",
+                        glGetString(GL_SHADING_LANGUAGE_VERSION));
     GLCall(program = glCreateProgram())
     GLCall(Shader shader = Shader(program, vertexShaderCode, fragmentShaderCode))
+
+    GLCall(glBindAttribLocation(program, 0, "position"))
+
     GLCall(glLinkProgram(program))
+
+    GLboolean isProgram = glIsProgram(program);
+    if (isProgram == GL_FALSE) {
+        __android_log_print(ANDROID_LOG_ERROR, "OpenGL isProgram", "%s", "Failed");
+    }
+    GLint status;
+    glGetProgramiv(program, GL_LINK_STATUS, &status);
+    if (status == GL_FALSE) {
+        __android_log_print(ANDROID_LOG_ERROR, "OpenGL program status", "%s", "Failed");
+        GLsizei logLength;
+        GLchar log[1024];
+        glGetProgramInfoLog(program, sizeof(log), &logLength, log);
+        __android_log_print(ANDROID_LOG_ERROR, "OpenGL program status", "%s", log);
+    }
 
     GLCall(glGenBuffers(2, arrayBuffer))
     GLCall(glBindBuffer(GL_ARRAY_BUFFER, arrayBuffer[0]))
@@ -556,10 +659,6 @@ void Java_com_demo_opengl_CameraActivity_00024GL_00024Render_onSurfaceCreated(JN
     GLCall(saturationLocation = glGetUniformLocation(program, "u_saturation"))
     GLCall(contrastLocation = glGetUniformLocation(program, "u_contrast"))
     GLCall(brightnessLocation = glGetUniformLocation(program, "u_brightness"))
-
-
-    // Create window with surface
-    window = ANativeWindow_fromSurface(jni, surface);
 
     startCamera();
 }

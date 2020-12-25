@@ -25,8 +25,13 @@ extern "C" {
     x; \
     errors(checkError(__LINE__,__func__)); \
 
+#define EGLCall(x) \
+    x; \
+//    errors(checkEGLError(__LINE__,__func__)) \
+
 void clearError();
 void checkError(int line, const char *name);
+void checkEGLError(int line, const char *name);
 
 class Renderer {
 public:

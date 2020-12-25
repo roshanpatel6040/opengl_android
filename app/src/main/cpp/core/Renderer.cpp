@@ -8,11 +8,20 @@
 #include <string>
 #include "android/log.h"
 #include "Renderer.h"
+#include "EGL/egl.h"
 
 const char *TAG = "Renderer";
 
 void clearError() {
     while (glGetError() != GL_NO_ERROR) {}
+}
+
+void checkEGLError(int line, const char *function) {
+    EGLint error = eglGetError();
+    __android_log_print(ANDROID_LOG_ERROR, "EGL error", "%i function: %s at line %d",
+                        error,
+                        function,
+                        line);
 }
 
 void checkError(int line, const char *function) {

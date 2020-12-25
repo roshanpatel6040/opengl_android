@@ -6,10 +6,7 @@ import android.opengl.GLES11Ext.GL_TEXTURE_EXTERNAL_OES
 import android.opengl.GLES20
 import android.opengl.GLSurfaceView
 import android.os.Bundle
-import android.view.Gravity
-import android.view.MotionEvent
-import android.view.Surface
-import android.view.WindowManager
+import android.view.*
 import android.widget.FrameLayout
 import android.widget.SeekBar
 import androidx.appcompat.app.AppCompatActivity
@@ -38,6 +35,12 @@ class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener {
             WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
         )
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        val flags = View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
+                View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
+                View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+                View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+        window.decorView.systemUiVisibility = flags
+
         initialize()
         gl = GL(this)
         gl.fitsSystemWindows = false
@@ -171,12 +174,8 @@ class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener {
                     }
                 }
 
-                // Choose you preferred preview size here before creating surface
-                // val optimalSize = getOptimalSize()
-                // surfaceTexture.setDefaultBufferSize(optimalSize.width, optimalSize.height)
                 val surface = Surface(surfaceTexture)
 
-                // Pass to native code
                 onSurfaceCreated(textureBuffer[0], surface, cameraWidth, cameraHeight)
             }
 

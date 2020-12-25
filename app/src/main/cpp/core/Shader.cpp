@@ -38,6 +38,16 @@ int Shader::loadShader(int type, const std::string &shaderCode) {
     const char *source = shaderCode.c_str();
     glShaderSource(shader, 1, &source, nullptr);
     glCompileShader(shader);
+    GLint vStatus;
+    glGetShaderiv(shader, GL_COMPILE_STATUS, &vStatus);
+    if (vStatus == GL_FALSE) {
+        GLsizei logLength;
+        GLchar log[1024];
+        __android_log_print(ANDROID_LOG_ERROR, "OpenGL shader status", "%s type: %s", "Failed",
+                            (type == GL_VERTEX_SHADER) ? "Vertex" : "Fragment");
+        glGetShaderInfoLog(shader, sizeof(log), &logLength, log);
+        __android_log_print(ANDROID_LOG_ERROR, "OpenGL shader status", "%s", log);
+    }
     return shader;
 }
 
