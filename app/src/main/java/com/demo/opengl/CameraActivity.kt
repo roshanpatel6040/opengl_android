@@ -6,6 +6,7 @@ import android.opengl.GLES11Ext.GL_TEXTURE_EXTERNAL_OES
 import android.opengl.GLES20
 import android.opengl.GLSurfaceView
 import android.os.Bundle
+import android.util.Log
 import android.view.*
 import android.widget.FrameLayout
 import android.widget.SeekBar
@@ -19,6 +20,7 @@ class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener {
         private const val BRIGHTNESS = "C_B"
         private const val CONTRAST = "C_C"
         private const val SATURATION = "C_S"
+        private const val EXPOSURE = "C_E"
     }
 
     init {
@@ -41,7 +43,6 @@ class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener {
                 View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
         window.decorView.systemUiVisibility = flags
 
-        initialize()
         gl = GL(this)
         gl.fitsSystemWindows = false
         frameLayout = FrameLayout(this)
@@ -50,6 +51,8 @@ class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener {
         addSeekBar(SATURATION, 5, 0, 10, 0)
         addSeekBar(CONTRAST, 10, 0, 20, 150)
         addSeekBar(BRIGHTNESS, 5, 0, 10, 300)
+
+        initialize()
 
         setContentView(frameLayout)
     }
@@ -71,6 +74,10 @@ class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener {
         frameLayout.addView(seekBar)
     }
 
+    private fun addExposureTime(min: Int, max: Int) {
+        addSeekBar(EXPOSURE, min + ((max - min) / 2), min, max, 450)
+    }
+
     override fun onResume() {
         super.onResume()
         gl.onResume()
@@ -86,7 +93,12 @@ class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener {
         destroy()
     }
 
+    fun message() {
+        Log.e("TAG", "message")
+    }
+
     private external fun initialize()
+    private external fun changeExposure(exposure: Int)
     private external fun destroy()
 
     class GL @JvmOverloads constructor(context: Context) : GLSurfaceView(context) {
@@ -220,6 +232,9 @@ class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener {
             }
             BRIGHTNESS -> {
                 gl.changeBrightness(progress.div(10.0f).minus(0.5f))
+            }
+            EXPOSURE -> {
+                changeExposure(seekBar.progress)
             }
         }
     }
