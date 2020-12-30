@@ -3,8 +3,11 @@
 //
 
 #include <cstdio>
+#include <unistd.h>
 #include <jni.h>
 #include <EGL/egl.h>
+#include <cstdlib>
+#include <dirent.h>
 #include <GLES/gl.h>
 #include <GLES/glplatform.h>
 #include <GLES2/gl2.h>
@@ -66,6 +69,7 @@ GLuint brightnessLocation;
 ACameraManager *cameraManager;
 ACameraDevice *cameraDevice;
 ACaptureRequest *previewRequest;
+ACaptureRequest *captureRequest;
 ACameraCaptureSession *session;
 ANativeWindow *window;
 ANativeWindow *imageWindow;
@@ -73,9 +77,11 @@ AImageReader *imageReader;
 ACaptureSessionOutput *captureSessionOutput;
 ACaptureSessionOutput *imageOutput;
 ACaptureSessionOutputContainer *captureSessionOutputContainer;
+ACaptureSessionOutputContainer *captureImageSessionOutputContainer;
 ACameraOutputTarget *outputTarget;
 ACameraOutputTarget *imageTarget;
 ACameraMetadata *cameraMetadata;
+ACameraMetadata_const_entry entry = {0};
 
 #define Camera(x) \
     if(x != ACAMERA_OK){ \
@@ -151,19 +157,31 @@ static ACameraCaptureSession_captureCallbacks captureCallbacks = {
 static void imageCallback(void *context, AImageReader *reader) {
     AImage *image = nullptr;
     auto status = AImageReader_acquireNextImage(reader, &image);
-    // Check status here ...
-
-    // Try to process data without blocking the callback
+    if (status != AMEDIA_OK) {
+        __android_log_print(ANDROID_LOG_ERROR, "Camera imageCallback", "%d", status);
+    }
     std::thread processor([=]() {
 
         uint8_t *data = nullptr;
         int len = 0;
         AImage_getPlaneData(image, 0, &data, &len);
 
-        // Process data here
-        // ...
-        __android_log_print(ANDROID_LOG_DEBUG, "Camera", "%s", "Captured");
+        const char *dirName = "/storage/emulated/0/pro/";
+        DIR *dir = opendir(dirName);
+        if (dir) {
+            closedir(dir);
+        } else {
+            std::string command = "mkdir -p ";
+            command += dirName;
+            system(command.c_str());
+        }
 
+        std::string fileName = dirName;
+        fileName += "preview.jpg";
+        FILE *imageFile = std::fopen(fileName.c_str(), "wb");
+        fwrite(data, 1, len, imageFile);
+        fclose(imageFile);
+        __android_log_print(ANDROID_LOG_DEBUG, "Camera", "%s", "Image saved");
         AImage_delete(image);
     });
     processor.detach();
@@ -171,11 +189,11 @@ static void imageCallback(void *context, AImageReader *reader) {
 
 AImageReader *createJpegReader() {
     AImageReader *reader = nullptr;
-    media_status_t status = AImageReader_new(640, 480, AIMAGE_FORMAT_JPEG,
-                                             2, &reader);
+    media_status_t status = AImageReader_new(1920, 1080, AIMAGE_FORMAT_JPEG,
+                                             4, &reader);
 
     if (status != AMEDIA_OK) {
-        // Handle errors here
+        __android_log_print(ANDROID_LOG_ERROR, "Camera Reader", "%d", status);
     }
 
     AImageReader_ImageListener listener{
@@ -280,7 +298,6 @@ void cameraDetails(std::string cameraId, JNIEnv *env, jobject object) {
     Camera(cameraCharacteristicStatus)
 
     // Exposure range
-    ACameraMetadata_const_entry entry = {0};
     ACameraMetadata_getConstEntry(cameraMetadata,
                                   ACAMERA_SENSOR_INFO_EXPOSURE_TIME_RANGE, &entry);
     int64_t minExposure = entry.data.i64[0];
@@ -288,9 +305,9 @@ void cameraDetails(std::string cameraId, JNIEnv *env, jobject object) {
     __android_log_print(ANDROID_LOG_DEBUG, "Camera exposure range", "%lli to %lli", minExposure,
                         maxExposure);
 
-//    jclass clazz = (*env).FindClass("com/demo/opengl/CameraActivity");
-//    jmethodID methodId = (*env).GetMethodID(clazz, "addExposureTime", "(II)V");
-//    (*env).CallVoidMethod(object, methodId, minExposure, maxExposure);
+    jclass clazz = (*env).FindClass("com/demo/opengl/CameraActivity");
+    jmethodID methodId = (*env).GetMethodID(clazz, "addExposureTime", "(JJ)V");
+    (*env).CallVoidMethod(object, methodId, minExposure, maxExposure);
 
     // Sensitivity range
     ACameraMetadata_getConstEntry(cameraMetadata,
@@ -402,6 +419,22 @@ void openCamera(JNIEnv *env, jobject object) {
     cameraDetails(cameraID, env, object);
 }
 
+void captureImage() {
+    camera_status_t captureRequestStatus = ACameraDevice_createCaptureRequest(cameraDevice,
+                                                                              TEMPLATE_STILL_CAPTURE,
+                                                                              &captureRequest);
+    Camera(captureRequestStatus)
+
+    ANativeWindow_acquire(window);
+
+    camera_status_t addTargetStatus = ACaptureRequest_addTarget(captureRequest, imageTarget);
+    Camera(addTargetStatus)
+
+    camera_status_t captureStatus = ACameraCaptureSession_capture(session, &captureCallbacks, 1,
+                                                                  &captureRequest, nullptr);
+    Camera(captureStatus)
+}
+
 void startCamera(JNIEnv *env, jobject object) {
     // Create capture request
     camera_status_t captureRequestStatus = ACameraDevice_createCaptureRequest(cameraDevice,
@@ -421,16 +454,14 @@ void startCamera(JNIEnv *env, jobject object) {
             captureSessionOutputContainer, captureSessionOutput);
     Camera(captureSessionOutputContainerAddStatus)
 
-
     // Image reader
-//    imageReader = createJpegReader();
-//    imageWindow = createSurface(imageReader);
-//    ANativeWindow_acquire(imageWindow);
-//    ACameraOutputTarget_create(imageWindow, &imageTarget);
-//    ACaptureRequest_addTarget(previewRequest, imageTarget);
-//    ACaptureSessionOutput_create(imageWindow, &imageOutput);
-//    ACaptureSessionOutputContainer_add(captureSessionOutputContainer, imageOutput);
+    imageReader = createJpegReader();
+    imageWindow = createSurface(imageReader);
+    ACameraOutputTarget_create(imageWindow, &imageTarget);
+    ACaptureSessionOutput_create(imageWindow, &imageOutput);
+    ACaptureSessionOutputContainer_add(captureSessionOutputContainer, imageOutput);
 
+    ANativeWindow_acquire(window);
     camera_status_t outputTargetStatus = ACameraOutputTarget_create(window, &outputTarget);
     Camera(outputTargetStatus)
     camera_status_t addTargetStatus = ACaptureRequest_addTarget(previewRequest, outputTarget);
@@ -443,7 +474,7 @@ void startCamera(JNIEnv *env, jobject object) {
                                                                     &controlMode);
     Camera(controlModeStatus)
 
-    uint8_t controlAfMode = ACAMERA_CONTROL_AF_MODE_AUTO;
+    uint8_t controlAfMode = ACAMERA_CONTROL_AF_MODE_CONTINUOUS_PICTURE;
     camera_status_t controlModeAFStatus = ACaptureRequest_setEntry_u8(previewRequest,
                                                                       ACAMERA_CONTROL_AF_MODE,
                                                                       1,
@@ -463,7 +494,7 @@ void startCamera(JNIEnv *env, jobject object) {
 //                                                                     1, &correctionMode);
 //    Camera(colorCorrectStatus)
 
-//    const float gainValues[] = {0.9,1.0,0.1,0.1};
+//    const float gainValues[] = {3.0,0.0,0.0,0.0};
 //    camera_status_t colorGainStatus = ACaptureRequest_setEntry_float(previewRequest,
 //                                                                     ACAMERA_COLOR_CORRECTION_GAINS,
 //                                                                     1,
@@ -495,6 +526,13 @@ void startCamera(JNIEnv *env, jobject object) {
                                                                 ACAMERA_SENSOR_SENSITIVITY, 1,
                                                                 &sensor);
     Camera(sensorStatus)
+
+//    const int64_t frameDuration = 3000000;
+//    camera_status_t sensorFrameDurationStatus = ACaptureRequest_setEntry_i64(previewRequest,
+//                                                                             ACAMERA_SENSOR_FRAME_DURATION,
+//                                                                             1,
+//                                                                             &frameDuration);
+//    Camera(sensorFrameDurationStatus)
 
     float lensAperture = 1.5;
     camera_status_t lensApertureStatus = ACaptureRequest_setEntry_float(previewRequest,
@@ -560,13 +598,8 @@ void Java_com_demo_opengl_CameraActivity_destroy(JNIEnv *jni, jobject object) {
     closeCamera();
 }
 
-extern "C" {
 void Java_com_demo_opengl_CameraActivity_00024GL_capture(JNIEnv *jni, jobject object) {
-    __android_log_print(ANDROID_LOG_DEBUG, "Capture", "%s", "Initiated");
-    camera_status_t captureStatus = ACameraCaptureSession_capture(session, &captureCallbacks, 1,
-                                                                  &previewRequest, nullptr);
-    Camera(captureStatus)
-}
+    captureImage();
 }
 
 void Java_com_demo_opengl_CameraActivity_00024GL_00024Render_onSurfaceCreated(JNIEnv *jni,

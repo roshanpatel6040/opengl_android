@@ -1,18 +1,23 @@
 package com.demo.opengl
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.SurfaceTexture
 import android.opengl.GLES11Ext.GL_TEXTURE_EXTERNAL_OES
 import android.opengl.GLES20
+import android.opengl.GLES20.*
 import android.opengl.GLSurfaceView
 import android.os.Bundle
-import android.util.Log
+import android.os.Environment
 import android.view.*
 import android.widget.FrameLayout
 import android.widget.SeekBar
 import androidx.appcompat.app.AppCompatActivity
+import java.io.*
+import java.nio.ByteBuffer
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
+
 
 class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener {
 
@@ -74,8 +79,14 @@ class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener {
         frameLayout.addView(seekBar)
     }
 
-    private fun addExposureTime(min: Int, max: Int) {
-        addSeekBar(EXPOSURE, min + ((max - min) / 2), min, max, 450)
+    private fun addExposureTime(min: Long, max: Long) {
+        addSeekBar(
+            EXPOSURE,
+            min.toInt() + ((max.toInt() - min.toInt()) / 2),
+            min.toInt(),
+            max.toInt(),
+            450
+        )
     }
 
     override fun onResume() {
@@ -91,10 +102,6 @@ class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener {
     override fun onDestroy() {
         super.onDestroy()
         destroy()
-    }
-
-    fun message() {
-        Log.e("TAG", "message")
     }
 
     private external fun initialize()
@@ -153,8 +160,8 @@ class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener {
 
             private val cameraWidth = 1920
             private val cameraHeight = 1080
-            private val width = context.resources.displayMetrics.widthPixels
-            private val height = context.resources.displayMetrics.heightPixels
+            private var width = context.resources.displayMetrics.widthPixels
+            private var height = context.resources.displayMetrics.heightPixels
 
             override fun onDrawFrame(gl: GL10?) {
                 synchronized(lock) {
