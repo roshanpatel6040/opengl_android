@@ -21,6 +21,8 @@
 #include "GLES3/gl32.h"
 #include "GLES3/gl3platform.h"
 #include "GLES3/gl3.h"
+#include "GLES3/gl31.h"
+#include "GLES3/gl3ext.h"
 #include "glm/glm.hpp"
 #include "glm/ext.hpp"
 #include <android/asset_manager_jni.h>
@@ -65,6 +67,8 @@ GLuint chordsHandle;
 GLuint saturationLocation;
 GLuint contrastLocation;
 GLuint brightnessLocation;
+GLuint textureLutReferenceID;
+GLuint lutTextureLocation;
 
 ACameraManager *cameraManager;
 ACameraDevice *cameraDevice;
@@ -627,25 +631,30 @@ void Java_com_demo_opengl_CameraActivity_00024GL_00024Render_onSurfaceCreated(JN
             2, 1, 0, 0, 3, 2
     };
 
-    std::string vertexShaderCode = "attribute vec3 position;\n"
-                                   "attribute vec2 texChords;\n"
+    std::string vertexShaderCode = "#version 320 es\n"
+                                   "in vec3 position;\n"
+                                   "in vec2 texChords;\n"
                                    "uniform mat4 texMatrix;\n"
                                    "uniform mat4 u_MVP;\n"
-                                   "varying vec2 v_Chord;\n"
+                                   "out vec2 v_Chord;\n"
                                    "void main()\n"
                                    "{\n"
                                    "v_Chord = (texMatrix * vec4(texChords.x, texChords.y, 0.0, 1.0)).xy;\n"
                                    "gl_Position = u_MVP * vec4(position,1.0);\n"
                                    "}";
-    std::string fragmentShaderCode = "#extension GL_OES_EGL_image_external : require\n"
+    std::string fragmentShaderCode = "#version 320 es\n"
+                                     "#extension GL_OES_EGL_image_external_essl3 : require\n"
+                                     "#extension GL_OES_EGL_image_external : require\n"
                                      "precision highp float;\n"
                                      "uniform highp vec4 color;\n"
-                                     "varying lowp vec2 v_Chord;\n"
+                                     "in lowp vec2 v_Chord;\n"
                                      "uniform samplerExternalOES texture;\n"
+                                     "uniform highp sampler3D textureLut;\n"
                                      "uniform float u_saturation;\n"
                                      "uniform float u_contrast;\n"
                                      "uniform float u_brightness;\n"
                                      "const float Epsilon = 1e-10;\n"
+                                     "out vec4 fragColor;\n"
                                      "\n"
                                      "// ***** Rgb to hsv ***** \n"
                                      "vec3 RGBtoHSV(in vec3 RGB)\n"
@@ -683,17 +692,26 @@ void Java_com_demo_opengl_CameraActivity_00024GL_00024Render_onSurfaceCreated(JN
                                      "        return clamp(contrastColor,0.0,1.0);\n"
                                      "}\n"
                                      "\n"
-                                     "\n"
+                                     "// ***** Lut Filter ***** \n"
+                                     "vec4 lut(vec4 color)\n"
+                                     "{\n"
+                                     "float alpha = color.a;\n"
+                                     "vec4 pmc = vec4(color.rgb/alpha,alpha);\n"
+                                     "vec4 lookup = texture(textureLut,pmc.rgb);\n"
+                                     "lookup.a = 1.0;\n"
+                                     "return lookup;\n"
+                                     "}\n"
                                      "void main()\n"
                                      "{\n"
-                                     "vec4 frag = texture2D(texture,v_Chord);\n"
+                                     "vec4 frag = texture(texture,v_Chord);\n"
                                      "vec3 color = frag.xyz;\n"
                                      "vec3 col_hsv = RGBtoHSV(color.rgb);\n"
                                      "col_hsv.y *= (u_saturation * 2.0); \n"
                                      "vec3 col_rgb = HSVtoRGB(col_hsv.rgb);\n"
                                      "vec4 final = vec4(col_rgb.rgb,1.0);\n"
                                      "vec4 contrast = contrast(final,u_contrast);\n"
-                                     "gl_FragColor = brightness(contrast,u_brightness);\n"
+                                     "vec4 brightness = brightness(contrast,u_brightness);\n"
+                                     "fragColor = lut(brightness);\n"
                                      "}";
     __android_log_print(ANDROID_LOG_ERROR, "OpenGL version", "%s", glGetString(GL_VERSION));
     __android_log_print(ANDROID_LOG_ERROR, "OpenGL shader version", "%s",
@@ -719,6 +737,28 @@ void Java_com_demo_opengl_CameraActivity_00024GL_00024Render_onSurfaceCreated(JN
         __android_log_print(ANDROID_LOG_ERROR, "OpenGL program status", "%s", log);
     }
 
+    GLCall(glActiveTexture(GL_TEXTURE1))
+    GLCall(glGenTextures(1, &textureLutReferenceID))
+    GLCall(glBindTexture(GL_TEXTURE_3D, textureLutReferenceID))
+    GLCall(glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR))
+    GLCall(glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR))
+    GLCall(glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE))
+    GLCall(glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE))
+
+    int tw;
+    int th;
+    int channels;
+    unsigned char *buffer;
+    std::string path = "/storage/emulated/0/default.png";
+    stbi_set_flip_vertically_on_load(true);
+    buffer = stbi_load(path.c_str(), &tw, &th, &channels, 4);
+
+    GLCall(glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA, tw, th, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, buffer))
+
+    if (buffer) {
+        stbi_image_free(buffer);
+    }
+
     GLCall(glGenBuffers(2, arrayBuffer))
     GLCall(glBindBuffer(GL_ARRAY_BUFFER, arrayBuffer[0]))
     GLCall(glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_DYNAMIC_DRAW))
@@ -735,6 +775,7 @@ void Java_com_demo_opengl_CameraActivity_00024GL_00024Render_onSurfaceCreated(JN
     GLCall(saturationLocation = glGetUniformLocation(program, "u_saturation"))
     GLCall(contrastLocation = glGetUniformLocation(program, "u_contrast"))
     GLCall(brightnessLocation = glGetUniformLocation(program, "u_brightness"))
+    GLCall(lutTextureLocation = glGetUniformLocation(program, "textureLut"))
 
     startCamera(jni, object);
 }
@@ -790,6 +831,14 @@ Java_com_demo_opengl_CameraActivity_00024GL_00024Render_onDrawFrame(JNIEnv *jni,
     jni->ReleaseFloatArrayElements(array, tm, 0);
 
     GLCall(glUniform1i(textureLocation, 0))
+
+    GLCall(glActiveTexture(GL_TEXTURE1))
+    GLCall(glBindTexture(GL_TEXTURE_3D, textureLutReferenceID))
+    GLCall(glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR))
+    GLCall(glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR))
+    GLCall(glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE))
+    GLCall(glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE))
+    GLCall(glUniform1i(lutTextureLocation, 1))
 
     GLCall(glUniform1f(saturationLocation, saturation))
     GLCall(glUniform1f(contrastLocation, contrast))

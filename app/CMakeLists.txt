@@ -50,6 +50,7 @@ target_link_libraries( # Specifies the target library.
         ${media-lib}
         EGL
         GLESv2
+        GLESv3
         )
 
 target_link_libraries( # Specifies the target library.
@@ -63,4 +64,5 @@ target_link_libraries( # Specifies the target library.
         ${log-lib}
         EGL
         GLESv2
+        GLESv3
         )

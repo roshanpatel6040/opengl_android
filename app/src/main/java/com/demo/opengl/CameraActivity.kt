@@ -113,7 +113,7 @@ class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener {
         private var renderer = Render(context)
 
         init {
-            setEGLContextClientVersion(2)
+            setEGLContextClientVersion(3)
             setRenderer(renderer)
         }
 
