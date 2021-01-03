@@ -9,6 +9,7 @@ import android.opengl.GLES20.*
 import android.opengl.GLSurfaceView
 import android.os.Bundle
 import android.os.Environment
+import android.util.Log
 import android.view.*
 import android.widget.FrameLayout
 import android.widget.SeekBar
@@ -60,6 +61,9 @@ class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener {
         initialize()
 
         setContentView(frameLayout)
+
+//        val file = File(Environment.getExternalStorageDirectory(),"default.png");
+//        Log.e("File","${file.absolutePath}")
     }
 
     private fun addSeekBar(tag: String, progress: Int, min: Int, max: Int, margin: Int) {

@@ -644,16 +644,19 @@ void Java_com_demo_opengl_CameraActivity_00024GL_00024Render_onSurfaceCreated(JN
                                    "}";
     std::string fragmentShaderCode = "#version 320 es\n"
                                      "#extension GL_OES_EGL_image_external_essl3 : require\n"
-                                     "#extension GL_OES_EGL_image_external : require\n"
                                      "precision highp float;\n"
                                      "uniform highp vec4 color;\n"
                                      "in lowp vec2 v_Chord;\n"
-                                     "uniform samplerExternalOES texture;\n"
-                                     "uniform highp sampler3D textureLut;\n"
+                                     "uniform samplerExternalOES tex;\n"
+                                     "uniform highp sampler2D textureLut;\n"
                                      "uniform float u_saturation;\n"
                                      "uniform float u_contrast;\n"
                                      "uniform float u_brightness;\n"
                                      "const float Epsilon = 1e-10;\n"
+                                     "const float cellsPerRow = 8.0;\n"
+                                     "const float cellSize = 0.125;\n"
+                                     "const float halfTexelSize = 0.0009765625;\n"
+                                     "const float cellSizeFixed = 0.123046875;\n"
                                      "out vec4 fragColor;\n"
                                      "\n"
                                      "// ***** Rgb to hsv ***** \n"
@@ -697,13 +700,29 @@ void Java_com_demo_opengl_CameraActivity_00024GL_00024Render_onSurfaceCreated(JN
                                      "{\n"
                                      "float alpha = color.a;\n"
                                      "vec4 pmc = vec4(color.rgb/alpha,alpha);\n"
-                                     "vec4 lookup = texture(textureLut,pmc.rgb);\n"
+                                     "vec4 lookup = texture(textureLut,pmc.xy);\n"
                                      "lookup.a = 1.0;\n"
                                      "return lookup;\n"
                                      "}\n"
+                                     "vec4 lutFilter(vec4 color)\n"
+                                     "{\n"
+                                     "float b = color.b * (cellsPerRow * cellsPerRow - 1.0);\n"
+                                     "vec2 lc,ls,uc,us;\n"
+                                     "lc.y = floor(b / cellsPerRow);\n"
+                                     "lc.x = floor(b) - lc.y * cellsPerRow;\n"
+                                     "ls.x = lc.x * cellSize + halfTexelSize + cellSizeFixed * color.r;\n"
+                                     "ls.y = lc.y * cellSize + halfTexelSize + cellSizeFixed * color.g;\n"
+                                     "uc.y = floor(ceil(b) / cellsPerRow);\n"
+                                     "uc.x = ceil(b) - uc.y * cellsPerRow;\n"
+                                     "us.x = uc.x * cellSize + halfTexelSize + cellSizeFixed * color.r;\n"
+                                     "us.y = uc.y * cellSize + halfTexelSize + cellSizeFixed * color.g;\n"
+                                     "vec3 outColor = mix(texture(textureLut,ls).rgb,texture(textureLut,us).rgb, fract(b));\n"
+                                     "outColor = mix(color.rgb, outColor,0.15555);\n" // last parameter ranges 0.0 to 1.0 -> 1.0 show lut color
+                                     "return vec4(outColor,color.x);\n"
+                                     "}\n"
                                      "void main()\n"
                                      "{\n"
-                                     "vec4 frag = texture(texture,v_Chord);\n"
+                                     "vec4 frag = texture(tex,v_Chord);\n"
                                      "vec3 color = frag.xyz;\n"
                                      "vec3 col_hsv = RGBtoHSV(color.rgb);\n"
                                      "col_hsv.y *= (u_saturation * 2.0); \n"
@@ -711,7 +730,7 @@ void Java_com_demo_opengl_CameraActivity_00024GL_00024Render_onSurfaceCreated(JN
                                      "vec4 final = vec4(col_rgb.rgb,1.0);\n"
                                      "vec4 contrast = contrast(final,u_contrast);\n"
                                      "vec4 brightness = brightness(contrast,u_brightness);\n"
-                                     "fragColor = lut(brightness);\n"
+                                     "fragColor = lutFilter(brightness);\n"
                                      "}";
     __android_log_print(ANDROID_LOG_ERROR, "OpenGL version", "%s", glGetString(GL_VERSION));
     __android_log_print(ANDROID_LOG_ERROR, "OpenGL shader version", "%s",
@@ -739,11 +758,11 @@ void Java_com_demo_opengl_CameraActivity_00024GL_00024Render_onSurfaceCreated(JN
 
     GLCall(glActiveTexture(GL_TEXTURE1))
     GLCall(glGenTextures(1, &textureLutReferenceID))
-    GLCall(glBindTexture(GL_TEXTURE_3D, textureLutReferenceID))
-    GLCall(glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR))
-    GLCall(glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR))
-    GLCall(glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE))
-    GLCall(glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE))
+    GLCall(glBindTexture(GL_TEXTURE_2D, textureLutReferenceID))
+    GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR))
+    GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR))
+    GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE))
+    GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE))
 
     int tw;
     int th;
@@ -753,10 +772,12 @@ void Java_com_demo_opengl_CameraActivity_00024GL_00024Render_onSurfaceCreated(JN
     stbi_set_flip_vertically_on_load(true);
     buffer = stbi_load(path.c_str(), &tw, &th, &channels, 4);
 
-    GLCall(glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA, tw, th, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, buffer))
+    GLCall(glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, tw, th, 0, GL_RGBA, GL_UNSIGNED_BYTE, buffer))
 
     if (buffer) {
         stbi_image_free(buffer);
+    } else {
+        __android_log_print(ANDROID_LOG_ERROR, "Lut texture", "%s", "Failed");
     }
 
     GLCall(glGenBuffers(2, arrayBuffer))
@@ -833,11 +854,11 @@ Java_com_demo_opengl_CameraActivity_00024GL_00024Render_onDrawFrame(JNIEnv *jni,
     GLCall(glUniform1i(textureLocation, 0))
 
     GLCall(glActiveTexture(GL_TEXTURE1))
-    GLCall(glBindTexture(GL_TEXTURE_3D, textureLutReferenceID))
-    GLCall(glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR))
-    GLCall(glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR))
-    GLCall(glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE))
-    GLCall(glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE))
+    GLCall(glBindTexture(GL_TEXTURE_2D, textureLutReferenceID))
+    GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR))
+    GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR))
+    GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE))
+    GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE))
     GLCall(glUniform1i(lutTextureLocation, 1))
 
     GLCall(glUniform1f(saturationLocation, saturation))
