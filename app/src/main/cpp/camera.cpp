@@ -87,6 +87,8 @@ ACameraOutputTarget *imageTarget;
 ACameraMetadata *cameraMetadata;
 ACameraMetadata_const_entry entry = {0};
 
+bool isCaptured = false;
+
 #define Camera(x) \
     if(x != ACAMERA_OK){ \
         __android_log_print(ANDROID_LOG_ERROR,"Camera status","Line: %i, error: %i",__LINE__,x); \
@@ -604,6 +606,7 @@ void Java_com_demo_opengl_CameraActivity_destroy(JNIEnv *jni, jobject object) {
 
 void Java_com_demo_opengl_CameraActivity_00024GL_capture(JNIEnv *jni, jobject object) {
     captureImage();
+    isCaptured = true;
 }
 
 void Java_com_demo_opengl_CameraActivity_00024GL_00024Render_onSurfaceCreated(JNIEnv *jni,
@@ -882,5 +885,39 @@ Java_com_demo_opengl_CameraActivity_00024GL_00024Render_onDrawFrame(JNIEnv *jni,
 
     GLCall(glDisableVertexAttribArray(positionHandle))
     GLCall(glDisableVertexAttribArray(chordsHandle))
+
+    if (isCaptured) {
+        glPixelStorei(GL_PACK_ALIGNMENT, 4);
+        glReadBuffer(GL_FRONT);
+        auto *buffer = (unsigned char *) calloc(4 * windowWidth * windowHeight, sizeof(int));
+        GLCall(glReadPixels(0, 0, windowWidth, windowHeight, GL_RGBA, GL_UNSIGNED_BYTE, buffer))
+
+        if (!buffer) {
+            __android_log_print(ANDROID_LOG_ERROR, "Camera", "%s", "Captured failed");
+            isCaptured = false;
+            return;
+        }
+
+        std::thread processor([&]() {
+            const char *dirName = "/storage/emulated/0/pro/";
+            DIR *dir = opendir(dirName);
+            if (dir) {
+                closedir(dir);
+            } else {
+                std::string command = "mkdir -p ";
+                command += dirName;
+                system(command.c_str());
+            }
+
+            std::string fileName = dirName;
+            fileName += "preview.png";
+            FILE *imageFile = std::fopen(fileName.c_str(), "wb");
+            fwrite(buffer, 1, sizeof(buffer), imageFile);
+            fclose(imageFile);
+            __android_log_print(ANDROID_LOG_DEBUG, "Camera", "%s", "Image saved");
+            isCaptured = false;
+        });
+        processor.detach();
+    }
 }
 }
