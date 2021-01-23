@@ -13,10 +13,12 @@ import android.util.Log
 import android.view.*
 import android.widget.FrameLayout
 import android.widget.SeekBar
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.BufferedOutputStream
 import java.io.File
 import java.io.FileOutputStream
@@ -154,7 +156,7 @@ class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener {
 
         private external fun capture()
 
-        class Render(context: Context) : Renderer {
+        class Render(var context: Context) : Renderer {
 
             private var capture = false
 
@@ -253,6 +255,9 @@ class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener {
                         )
                         CoroutineScope(Dispatchers.Default).launch {
                             saveImage(pixelBuffer)
+                            withContext(Dispatchers.Main) {
+                                Toast.makeText(context, "Captured", Toast.LENGTH_SHORT).show()
+                            }
                         }
                     }
                 }

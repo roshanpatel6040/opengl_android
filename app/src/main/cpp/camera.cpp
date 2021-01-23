@@ -425,7 +425,7 @@ void openCamera(JNIEnv *env, jobject object) {
 
 void captureImage() {
     camera_status_t captureStatus = ACameraCaptureSession_capture(session, &captureCallbacks, 1,
-                                                                  &previewRequest, nullptr);
+                                                                  &captureRequest, nullptr);
     Camera(captureStatus)
 }
 
