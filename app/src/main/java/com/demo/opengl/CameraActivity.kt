@@ -14,8 +14,14 @@ import android.view.*
 import android.widget.FrameLayout
 import android.widget.SeekBar
 import androidx.appcompat.app.AppCompatActivity
-import java.io.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import java.io.BufferedOutputStream
+import java.io.File
+import java.io.FileOutputStream
 import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
 
@@ -138,7 +144,7 @@ class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener {
             val pointerId = event?.getPointerId(index!!)
             when (event?.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
-                    capture()
+                    renderer.captureImage(true)
                 }
                 MotionEvent.ACTION_MOVE -> {
                 }
@@ -150,12 +156,16 @@ class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener {
 
         class Render(context: Context) : Renderer {
 
+            private var capture = false
+
             private lateinit var surfaceTexture: SurfaceTexture
             private val texMatrix = FloatArray(16)
 
             @Volatile
             private var frameAvailable: Boolean = false
             private val lock = Object()
+
+            private val captureLock = Object()
 
             // Camera filter parameter values
             private var saturation = 0.5f
@@ -167,6 +177,53 @@ class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener {
             private var width = context.resources.displayMetrics.widthPixels
             private var height = context.resources.displayMetrics.heightPixels
 
+            fun captureImage(cap: Boolean) {
+                capture = cap
+            }
+
+            private fun saveImage(pixelBuffer: ByteBuffer) {
+                var i = 0
+                val tmp = ByteArray(width * 4)
+                while (i++ < height / 2) {
+                    pixelBuffer.get(tmp)
+                    System.arraycopy(
+                        pixelBuffer.array(),
+                        pixelBuffer.limit() - pixelBuffer.position(),
+                        pixelBuffer.array(),
+                        pixelBuffer.position() - width * 4,
+                        width * 4
+                    )
+                    System.arraycopy(
+                        tmp,
+                        0,
+                        pixelBuffer.array(),
+                        pixelBuffer.limit() - pixelBuffer.position(),
+                        width * 4
+                    )
+                }
+
+                pixelBuffer.rewind()
+
+                var bos: BufferedOutputStream? = null
+                val file = File(Environment.getExternalStorageDirectory(), "/pro/opengl.png")
+                if (!file.exists()) {
+                    file.createNewFile()
+                }
+                try {
+                    bos = BufferedOutputStream(FileOutputStream(file))
+                    val bmp =
+                        Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                    bmp.copyPixelsFromBuffer(pixelBuffer)
+                    bmp.compress(Bitmap.CompressFormat.PNG, 100, bos)
+                    bmp.recycle()
+                    Log.d("Renderer", "saveImage() Image captured")
+                } catch (e: Exception) {
+                    Log.e("Renderer", "saveImage() $e")
+                } finally {
+                    bos?.close()
+                }
+            }
+
             override fun onDrawFrame(gl: GL10?) {
                 synchronized(lock) {
                     if (frameAvailable) {
@@ -177,10 +234,34 @@ class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener {
                 }
 
                 onDrawFrame(texMatrix, saturation, contrast, brightness)
+
+                if (capture) {
+                    captureImage(false)
+                    synchronized(captureLock) {
+                        val pixelBuffer: ByteBuffer =
+                            ByteBuffer.allocateDirect(4 * width * height)
+                        pixelBuffer.order(ByteOrder.LITTLE_ENDIAN)
+
+                        glReadPixels(
+                            0,
+                            0,
+                            width,
+                            height,
+                            GL_RGBA,
+                            GL_UNSIGNED_BYTE,
+                            pixelBuffer
+                        )
+                        CoroutineScope(Dispatchers.Default).launch {
+                            saveImage(pixelBuffer)
+                        }
+                    }
+                }
             }
 
             override fun onSurfaceChanged(gl: GL10?, width: Int, height: Int) {
                 onSurfaceChanged(width, height)
+                this.width = width
+                this.height = height
             }
 
             override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
