@@ -26,6 +26,10 @@ class CameraSurface @JvmOverloads constructor(context: Context, attributeSet: At
         renderer.changeBrightness(value)
     }
 
+    fun changeHighlight(value: Float) {
+        renderer.changeHighlight(value)
+    }
+
     override fun onTouchEvent(event: MotionEvent?): Boolean {
         val index = event?.actionIndex
         val pointerId = event?.getPointerId(index!!)

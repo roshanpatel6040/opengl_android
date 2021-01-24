@@ -10,12 +10,7 @@ import com.demo.opengl.provider.CameraInterface
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import kotlinx.android.synthetic.main.activity_camera.*
 
-
 class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener, View.OnClickListener {
-
-    companion object {
-        private const val EXPOSURE = "C_E"
-    }
 
     init {
         System.loadLibrary("cameraCpp")
@@ -45,6 +40,7 @@ class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener, Vie
         seekBar_Brightness.setOnSeekBarChangeListener(this)
         seekBar_Contrast.setOnSeekBarChangeListener(this)
         seekBar_saturation.setOnSeekBarChangeListener(this)
+        seekBar_highlight.setOnSeekBarChangeListener(this)
     }
 
     override fun onResume() {
@@ -74,9 +70,9 @@ class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener, Vie
             R.id.seekBar_Brightness -> {
                 surface.changeBrightness(progress.div(10.0f).minus(0.5f))
             }
-//            EXPOSURE -> {
-//                CameraInterface.changeExposure(seekBar.progress)
-//            }
+            R.id.seekBar_highlight -> {
+                surface.changeHighlight(progress.div(10.0f))
+            }
         }
     }
 

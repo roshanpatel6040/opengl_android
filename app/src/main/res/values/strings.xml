@@ -3,4 +3,5 @@
     <string name="label_brightness">Brightness</string>
     <string name="label_contrast">Contrast</string>
     <string name="label_saturation">Saturation</string>
+    <string name="label_highlight">Highlight</string>
 </resources>

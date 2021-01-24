@@ -43,6 +43,7 @@ class CameraRenderer(var context: Context) : GLSurfaceView.Renderer {
     private var saturation = 0.5f
     private var contrast = 1.0f
     private var brightness = 0.0f
+    private var highlight = 0.0f
 
     private val cameraWidth = 1920
     private val cameraHeight = 1080
@@ -105,7 +106,7 @@ class CameraRenderer(var context: Context) : GLSurfaceView.Renderer {
             }
         }
 
-        CameraInterface.onDrawFrame(texMatrix, saturation, contrast, brightness)
+        CameraInterface.onDrawFrame(texMatrix, saturation, contrast, brightness, highlight)
 
         if (capture) {
             captureImage(false)
@@ -168,6 +169,10 @@ class CameraRenderer(var context: Context) : GLSurfaceView.Renderer {
 
     fun changeBrightness(value: Float) {
         brightness = value
+    }
+
+    fun changeHighlight(value: Float) {
+        highlight = value
     }
 
 }

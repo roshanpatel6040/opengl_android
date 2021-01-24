@@ -67,6 +67,7 @@ GLuint chordsHandle;
 GLuint saturationLocation;
 GLuint contrastLocation;
 GLuint brightnessLocation;
+GLuint highLightLocation;
 GLuint textureLutReferenceID;
 GLuint lutTextureLocation;
 
@@ -643,6 +644,7 @@ void Java_com_demo_opengl_provider_CameraInterface_onSurfaceCreated(JNIEnv *jni,
                                      "uniform float u_saturation;\n"
                                      "uniform float u_contrast;\n"
                                      "uniform float u_brightness;\n"
+                                     "uniform float u_highlight;\n"
                                      "const float Epsilon = 1e-10;\n"
                                      "const float cellsPerRow = 8.0;\n"
                                      "const float cellSize = 0.125;\n"
@@ -721,12 +723,19 @@ void Java_com_demo_opengl_provider_CameraInterface_onSurfaceCreated(JNIEnv *jni,
                                      "vec4 final = vec4(col_rgb.rgb,1.0);\n"
                                      "vec4 contrast = contrast(final,u_contrast);\n"
                                      "vec4 brightness = brightness(contrast,u_brightness);\n"
-                                     "fragColor = brightness;\n"
+                                     "float luminance = dot(brightness.rgb, vec3(0.3,0.3,0.3));\n"
+                                     "float shadowValue = 0.0;\n"
+                                     "float highlightValue = 0.0;\n"
+                                     "float shadow = clamp((pow(luminance, 1.0/(shadowValue+1.0)) + (-0.76)*pow(luminance, 2.0/(shadowValue+1.0))) - luminance, 0.0, 1.0);\n"
+                                     "float highlight = clamp((1.0 - (pow(1.0-luminance, 1.0/(2.0-u_highlight)) + (-0.8)*pow(1.0-luminance, 2.0/(2.0-u_highlight)))) - luminance, -1.0, 0.0);\n"
+                                     "vec3 result = vec3(0.0, 0.0, 0.0) + ((luminance + shadow + highlight) - 0.0) * ((brightness.rgb - vec3(0.0, 0.0, 0.0))/(luminance - 0.0));\n"
+                                     "fragColor = vec4(result.rgb,brightness.a);\n"
                                      "}";
     __android_log_print(ANDROID_LOG_ERROR, "OpenGL version", "%s", glGetString(GL_VERSION));
     __android_log_print(ANDROID_LOG_ERROR, "OpenGL shader version", "%s",
                         glGetString(GL_SHADING_LANGUAGE_VERSION));
     GLCall(glDisable(GL_DITHER))
+//    GLCall(glEnable(GL_FRAMEBUFFER_SRGB_EXT))
     GLCall(program = glCreateProgram())
     GLCall(Shader shader = Shader(program, vertexShaderCode, fragmentShaderCode))
 
@@ -788,6 +797,7 @@ void Java_com_demo_opengl_provider_CameraInterface_onSurfaceCreated(JNIEnv *jni,
     GLCall(saturationLocation = glGetUniformLocation(program, "u_saturation"))
     GLCall(contrastLocation = glGetUniformLocation(program, "u_contrast"))
     GLCall(brightnessLocation = glGetUniformLocation(program, "u_brightness"))
+    GLCall(highLightLocation = glGetUniformLocation(program, "u_highlight"))
     GLCall(lutTextureLocation = glGetUniformLocation(program, "textureLut"))
 
     startCamera(jni, object);
@@ -808,7 +818,8 @@ Java_com_demo_opengl_provider_CameraInterface_onDrawFrame(JNIEnv *jni, jobject o
                                                           jfloatArray array,
                                                           jfloat saturation,
                                                           jfloat contrast,
-                                                          jfloat brightness) {
+                                                          jfloat brightness,
+                                                          jfloat highlight) {
     GLCall(glViewport(0, 0, windowWidth, windowHeight))
     GLCall(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT))
     GLCall(glClearColor(0, 0, 0, 1))
@@ -856,6 +867,7 @@ Java_com_demo_opengl_provider_CameraInterface_onDrawFrame(JNIEnv *jni, jobject o
     GLCall(glUniform1f(saturationLocation, saturation))
     GLCall(glUniform1f(contrastLocation, contrast))
     GLCall(glUniform1f(brightnessLocation, brightness))
+    GLCall(glUniform1f(highLightLocation, highlight))
 
     GLCall(glBindBuffer(GL_ARRAY_BUFFER, arrayBuffer[0]))
     GLCall(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, arrayBuffer[1]))
