@@ -1,8 +1,10 @@
-package com.demo.opengl
+package com.demo.opengl.gl
 
 import android.content.Context
 import android.opengl.GLSurfaceView
 import android.view.MotionEvent
+import com.demo.opengl.gl.model.Square
+import com.demo.opengl.gl.model.Triangle
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
 

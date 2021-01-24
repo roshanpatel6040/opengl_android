@@ -1,8 +1,9 @@
-package com.demo.opengl
+package com.demo.opengl.ui
 
 import android.content.res.AssetManager
-import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import androidx.appcompat.app.AppCompatActivity
+import com.demo.opengl.gl.GlSurface
 
 class MainActivity : AppCompatActivity() {
 

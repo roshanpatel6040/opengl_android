@@ -1,4 +1,4 @@
-package com.demo.opengl
+package com.demo.opengl.gl
 
 import android.opengl.GLES20
 import android.util.Log

@@ -1,6 +1,8 @@
-package com.demo.opengl
+package com.demo.opengl.gl.model
 
 import android.opengl.GLES20
+import com.demo.opengl.gl.GLHelper
+import com.demo.opengl.gl.Shader
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.FloatBuffer

@@ -309,9 +309,9 @@ void cameraDetails(std::string cameraId, JNIEnv *env, jobject object) {
     __android_log_print(ANDROID_LOG_DEBUG, "Camera exposure range", "%lli to %lli", minExposure,
                         maxExposure);
 
-    jclass clazz = (*env).FindClass("com/demo/opengl/CameraActivity");
-    jmethodID methodId = (*env).GetMethodID(clazz, "addExposureTime", "(JJ)V");
-    (*env).CallVoidMethod(object, methodId, minExposure, maxExposure);
+//    jclass clazz = (*env).FindClass("com/demo/opengl/ui/CameraActivity");
+//    jmethodID methodId = (*env).GetMethodID(clazz, "addExposureTime", "(JJ)V");
+//    (*env).CallVoidMethod(object, methodId, minExposure, maxExposure);
 
     // Sensitivity range
     ACameraMetadata_getConstEntry(cameraMetadata,
@@ -481,34 +481,29 @@ void startCamera(JNIEnv *env, jobject object) {
                                                                       &controlAfMode);
     Camera(controlModeAFStatus)
 
-    uint8_t controlAWBMode = ACAMERA_CONTROL_AWB_MODE_AUTO;
+    uint8_t controlAWBMode = ACAMERA_CONTROL_AWB_MODE_SHADE;
     camera_status_t controlModeAWBStatus = ACaptureRequest_setEntry_u8(previewRequest,
                                                                        ACAMERA_CONTROL_AWB_MODE,
                                                                        1,
                                                                        &controlAWBMode);
     Camera(controlModeAWBStatus)
 
-//    const uint8_t correctionMode = ACAMERA_COLOR_CORRECTION_MODE_TRANSFORM_MATRIX;
-//    camera_status_t colorCorrectStatus = ACaptureRequest_setEntry_u8(previewRequest,
-//                                                                     ACAMERA_COLOR_CORRECTION_MODE,
-//                                                                     1, &correctionMode);
-//    Camera(colorCorrectStatus)
+    const uint8_t correctionMode = ACAMERA_COLOR_CORRECTION_MODE_TRANSFORM_MATRIX;
+    camera_status_t colorCorrectStatus = ACaptureRequest_setEntry_u8(previewRequest, ACAMERA_COLOR_CORRECTION_MODE, 1, &correctionMode);
+    Camera(colorCorrectStatus)
 
-//    const float gainValues[] = {3.0,0.0,0.0,0.0};
-//    camera_status_t colorGainStatus = ACaptureRequest_setEntry_float(previewRequest,
-//                                                                     ACAMERA_COLOR_CORRECTION_GAINS,
-//                                                                     1,
-//                                                                     reinterpret_cast<const float *>(&gainValues));
-//    Camera(colorGainStatus)
+    const float gainValues[] = {1.0, 0.0, 0.0, 0.0};
+    camera_status_t colorGainStatus = ACaptureRequest_setEntry_float(previewRequest, ACAMERA_COLOR_CORRECTION_GAINS, 1, reinterpret_cast<const float *>(&gainValues));
+    Camera(colorGainStatus)
 
     // Turn off AE to apply sensor sensitivity and exposure time
-    uint8_t controlAEMode = ACAMERA_CONTROL_AE_MODE_ON;
+    uint8_t controlAEMode = ACAMERA_CONTROL_AE_MODE_OFF;
     camera_status_t controlModeAEStatus = ACaptureRequest_setEntry_u8(previewRequest,
                                                                       ACAMERA_CONTROL_AE_MODE,
                                                                       1,
                                                                       &controlAEMode);
     Camera(controlModeAEStatus)
-    int64_t sensorExposureTime = 500000;
+    int64_t sensorExposureTime = 30000000;
     camera_status_t expTimeStatus = ACaptureRequest_setEntry_i64(previewRequest,
                                                                  ACAMERA_SENSOR_EXPOSURE_TIME, 1,
                                                                  &sensorExposureTime);
@@ -527,12 +522,12 @@ void startCamera(JNIEnv *env, jobject object) {
                                                                 &sensor);
     Camera(sensorStatus)
 
-//    const int64_t frameDuration = 3000000;
-//    camera_status_t sensorFrameDurationStatus = ACaptureRequest_setEntry_i64(previewRequest,
-//                                                                             ACAMERA_SENSOR_FRAME_DURATION,
-//                                                                             1,
-//                                                                             &frameDuration);
-//    Camera(sensorFrameDurationStatus)
+    const int64_t frameDuration = 30000000;
+    camera_status_t sensorFrameDurationStatus = ACaptureRequest_setEntry_i64(previewRequest,
+                                                                             ACAMERA_SENSOR_FRAME_DURATION,
+                                                                             1,
+                                                                             &frameDuration);
+    Camera(sensorFrameDurationStatus)
 
     float lensAperture = 1.5;
     camera_status_t lensApertureStatus = ACaptureRequest_setEntry_float(previewRequest,
@@ -575,13 +570,13 @@ void closeCamera() {
 }
 
 extern "C" {
-void Java_com_demo_opengl_CameraActivity_initialize(JNIEnv *jni, jobject object) {
+void Java_com_demo_opengl_provider_CameraInterface_initialize(JNIEnv *jni, jobject object) {
     cameraManager = ACameraManager_create();
     openCamera(jni, object);
 }
 
 void
-Java_com_demo_opengl_CameraActivity_changeExposure(JNIEnv *jni, jobject object, jint exposure) {
+Java_com_demo_opengl_provider_CameraInterface_changeExposure(JNIEnv *jni, jobject object, jint exposure) {
     int64_t sensorExposureTime = exposure;
     camera_status_t expTimeStatus = ACaptureRequest_setEntry_i64(previewRequest,
                                                                  ACAMERA_SENSOR_EXPOSURE_TIME, 1,
@@ -594,20 +589,20 @@ Java_com_demo_opengl_CameraActivity_changeExposure(JNIEnv *jni, jobject object, 
                                                                                        nullptr);
 }
 
-void Java_com_demo_opengl_CameraActivity_destroy(JNIEnv *jni, jobject object) {
+void Java_com_demo_opengl_provider_CameraInterface_destroy(JNIEnv *jni, jobject object) {
     closeCamera();
 }
 
-void Java_com_demo_opengl_CameraActivity_00024GL_capture(JNIEnv *jni, jobject object) {
+void Java_com_demo_opengl_provider_CameraInterface_capture(JNIEnv *jni, jobject object) {
     captureImage();
 }
 
-void Java_com_demo_opengl_CameraActivity_00024GL_00024Render_onSurfaceCreated(JNIEnv *jni,
-                                                                              jobject object,
-                                                                              jint textureId,
-                                                                              jobject surface,
-                                                                              jint width,
-                                                                              jint height) {
+void Java_com_demo_opengl_provider_CameraInterface_onSurfaceCreated(JNIEnv *jni,
+                                                                    jobject object,
+                                                                    jint textureId,
+                                                                    jobject surface,
+                                                                    jint width,
+                                                                    jint height) {
     textureID = textureId;
     cameraWidth = width;
     cameraHeight = height;
@@ -798,10 +793,10 @@ void Java_com_demo_opengl_CameraActivity_00024GL_00024Render_onSurfaceCreated(JN
     startCamera(jni, object);
 }
 
-void Java_com_demo_opengl_CameraActivity_00024GL_00024Render_onSurfaceChanged(JNIEnv *jni,
-                                                                              jobject object,
-                                                                              jint width,
-                                                                              jint height) {
+void Java_com_demo_opengl_provider_CameraInterface_onSurfaceChanged(JNIEnv *jni,
+                                                                    jobject object,
+                                                                    jint width,
+                                                                    jint height) {
     windowWidth = width;
     windowHeight = height;
     ANativeWindow_acquire(window);
@@ -809,11 +804,11 @@ void Java_com_demo_opengl_CameraActivity_00024GL_00024Render_onSurfaceChanged(JN
 
 }
 void
-Java_com_demo_opengl_CameraActivity_00024GL_00024Render_onDrawFrame(JNIEnv *jni, jobject object,
-                                                                    jfloatArray array,
-                                                                    jfloat saturation,
-                                                                    jfloat contrast,
-                                                                    jfloat brightness) {
+Java_com_demo_opengl_provider_CameraInterface_onDrawFrame(JNIEnv *jni, jobject object,
+                                                          jfloatArray array,
+                                                          jfloat saturation,
+                                                          jfloat contrast,
+                                                          jfloat brightness) {
     GLCall(glViewport(0, 0, windowWidth, windowHeight))
     GLCall(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT))
     GLCall(glClearColor(0, 0, 0, 1))
