@@ -68,8 +68,12 @@ GLuint saturationLocation;
 GLuint contrastLocation;
 GLuint brightnessLocation;
 GLuint highLightLocation;
+GLuint shadowLocation;
+GLuint awbLocation;
 GLuint textureLutReferenceID;
 GLuint lutTextureLocation;
+
+float applyAwb = 0;
 
 ACameraManager *cameraManager;
 ACameraDevice *cameraDevice;
@@ -430,6 +434,103 @@ void captureImage() {
     Camera(captureStatus)
 }
 
+void autoMode() {
+    uint8_t controlMode = ACAMERA_CONTROL_MODE_AUTO;
+    ACaptureRequest_setEntry_u8(previewRequest, ACAMERA_CONTROL_MODE, 1, &controlMode);
+
+    uint8_t controlAfMode = ACAMERA_CONTROL_AF_MODE_CONTINUOUS_PICTURE;
+    ACaptureRequest_setEntry_u8(previewRequest, ACAMERA_CONTROL_AF_MODE, 1, &controlAfMode);
+
+    uint8_t controlAWBMode = ACAMERA_CONTROL_AWB_MODE_AUTO;
+    ACaptureRequest_setEntry_u8(previewRequest, ACAMERA_CONTROL_AWB_MODE, 1, &controlAWBMode);
+
+    uint8_t controlAEMode = ACAMERA_CONTROL_AE_MODE_ON;
+    ACaptureRequest_setEntry_u8(previewRequest, ACAMERA_CONTROL_AE_MODE, 1, &controlAEMode);
+
+    // set repeating request
+    ACameraCaptureSession_setRepeatingRequest(session, nullptr, 1, &previewRequest, nullptr);
+}
+
+void detectionMode() {
+    uint8_t controlMode = ACAMERA_CONTROL_MODE_AUTO;
+    camera_status_t controlModeStatus = ACaptureRequest_setEntry_u8(previewRequest,
+                                                                    ACAMERA_CONTROL_MODE,
+                                                                    1,
+                                                                    &controlMode);
+    Camera(controlModeStatus)
+
+    uint8_t controlAfMode = ACAMERA_CONTROL_AF_MODE_CONTINUOUS_PICTURE;
+    camera_status_t controlModeAFStatus = ACaptureRequest_setEntry_u8(previewRequest,
+                                                                      ACAMERA_CONTROL_AF_MODE,
+                                                                      1,
+                                                                      &controlAfMode);
+    Camera(controlModeAFStatus)
+
+    uint8_t controlAWBMode = ACAMERA_CONTROL_AWB_MODE_AUTO;
+    camera_status_t controlModeAWBStatus = ACaptureRequest_setEntry_u8(previewRequest,
+                                                                       ACAMERA_CONTROL_AWB_MODE,
+                                                                       1,
+                                                                       &controlAWBMode);
+    Camera(controlModeAWBStatus)
+
+    const uint8_t correctionMode = ACAMERA_COLOR_CORRECTION_MODE_TRANSFORM_MATRIX;
+    camera_status_t colorCorrectStatus = ACaptureRequest_setEntry_u8(previewRequest, ACAMERA_COLOR_CORRECTION_MODE, 1, &correctionMode);
+    Camera(colorCorrectStatus)
+
+    const float gainValues[] = {1.0, 0.0, 0.0, 0.0};
+    camera_status_t colorGainStatus = ACaptureRequest_setEntry_float(previewRequest, ACAMERA_COLOR_CORRECTION_GAINS, 1, reinterpret_cast<const float *>(&gainValues));
+    Camera(colorGainStatus)
+
+    // Turn off AE to apply sensor sensitivity and exposure time
+    uint8_t controlAEMode = ACAMERA_CONTROL_AE_MODE_OFF;
+    camera_status_t controlModeAEStatus = ACaptureRequest_setEntry_u8(previewRequest,
+                                                                      ACAMERA_CONTROL_AE_MODE,
+                                                                      1,
+                                                                      &controlAEMode);
+    Camera(controlModeAEStatus)
+
+    int32_t orientation = 90;
+    camera_status_t jpegOrientationStatus = ACaptureRequest_setEntry_i32(previewRequest,
+                                                                         ACAMERA_JPEG_ORIENTATION,
+                                                                         1,
+                                                                         &orientation);
+    Camera(jpegOrientationStatus)
+
+    const int32_t sensor = 800;
+    camera_status_t sensorStatus = ACaptureRequest_setEntry_i32(previewRequest,
+                                                                ACAMERA_SENSOR_SENSITIVITY, 1,
+                                                                &sensor);
+    Camera(sensorStatus)
+
+    int64_t sensorExposureTime = 30000000;
+    camera_status_t expTimeStatus = ACaptureRequest_setEntry_i64(previewRequest,
+                                                                 ACAMERA_SENSOR_EXPOSURE_TIME, 1,
+                                                                 &sensorExposureTime);
+    Camera(expTimeStatus)
+
+//    const int64_t frameDuration = 3000000;
+//    camera_status_t sensorFrameDurationStatus = ACaptureRequest_setEntry_i64(previewRequest,
+//                                                                             ACAMERA_SENSOR_FRAME_DURATION,
+//                                                                             1,
+//                                                                             &frameDuration);
+//    Camera(sensorFrameDurationStatus)
+
+    float lensAperture = 1.5;
+    camera_status_t lensApertureStatus = ACaptureRequest_setEntry_float(previewRequest,
+                                                                        ACAMERA_LENS_APERTURE, 1,
+                                                                        &lensAperture);
+    Camera(lensApertureStatus)
+
+    const uint8_t noiseMode = ACAMERA_NOISE_REDUCTION_MODE_MINIMAL;
+    camera_status_t noiseReductionStatus = ACaptureRequest_setEntry_u8(previewRequest,
+                                                                       ACAMERA_NOISE_REDUCTION_MODE,
+                                                                       1, &noiseMode);
+    Camera(noiseReductionStatus)
+
+    // set repeating request
+    ACameraCaptureSession_setRepeatingRequest(session, nullptr, 1, &previewRequest, nullptr);
+}
+
 void startCamera(JNIEnv *env, jobject object) {
     // Create capture request
     camera_status_t captureRequestStatus = ACameraDevice_createCaptureRequest(cameraDevice,
@@ -466,100 +567,10 @@ void startCamera(JNIEnv *env, jobject object) {
     ACaptureSessionOutput_create(imageWindow, &imageOutput);
     ACaptureSessionOutputContainer_add(captureSessionOutputContainer, imageOutput);
 
-//    ANativeWindow_acquire(window);
-
-    uint8_t controlMode = ACAMERA_CONTROL_MODE_AUTO;
-    camera_status_t controlModeStatus = ACaptureRequest_setEntry_u8(previewRequest,
-                                                                    ACAMERA_CONTROL_MODE,
-                                                                    1,
-                                                                    &controlMode);
-    Camera(controlModeStatus)
-
-    uint8_t controlAfMode = ACAMERA_CONTROL_AF_MODE_CONTINUOUS_PICTURE;
-    camera_status_t controlModeAFStatus = ACaptureRequest_setEntry_u8(previewRequest,
-                                                                      ACAMERA_CONTROL_AF_MODE,
-                                                                      1,
-                                                                      &controlAfMode);
-    Camera(controlModeAFStatus)
-
-    uint8_t controlAWBMode = ACAMERA_CONTROL_AWB_MODE_SHADE;
-    camera_status_t controlModeAWBStatus = ACaptureRequest_setEntry_u8(previewRequest,
-                                                                       ACAMERA_CONTROL_AWB_MODE,
-                                                                       1,
-                                                                       &controlAWBMode);
-    Camera(controlModeAWBStatus)
-
-    const uint8_t correctionMode = ACAMERA_COLOR_CORRECTION_MODE_TRANSFORM_MATRIX;
-    camera_status_t colorCorrectStatus = ACaptureRequest_setEntry_u8(previewRequest, ACAMERA_COLOR_CORRECTION_MODE, 1, &correctionMode);
-    Camera(colorCorrectStatus)
-
-    const float gainValues[] = {1.0, 0.0, 0.0, 0.0};
-    camera_status_t colorGainStatus = ACaptureRequest_setEntry_float(previewRequest, ACAMERA_COLOR_CORRECTION_GAINS, 1, reinterpret_cast<const float *>(&gainValues));
-    Camera(colorGainStatus)
-
-    // Turn off AE to apply sensor sensitivity and exposure time
-    uint8_t controlAEMode = ACAMERA_CONTROL_AE_MODE_OFF;
-    camera_status_t controlModeAEStatus = ACaptureRequest_setEntry_u8(previewRequest,
-                                                                      ACAMERA_CONTROL_AE_MODE,
-                                                                      1,
-                                                                      &controlAEMode);
-    Camera(controlModeAEStatus)
-    int64_t sensorExposureTime = 30000000;
-    camera_status_t expTimeStatus = ACaptureRequest_setEntry_i64(previewRequest,
-                                                                 ACAMERA_SENSOR_EXPOSURE_TIME, 1,
-                                                                 &sensorExposureTime);
-    Camera(expTimeStatus)
-
-    int32_t orientation = 90;
-    camera_status_t jpegOrientationStatus = ACaptureRequest_setEntry_i32(previewRequest,
-                                                                         ACAMERA_JPEG_ORIENTATION,
-                                                                         1,
-                                                                         &orientation);
-    Camera(jpegOrientationStatus)
-
-    const int32_t sensor = 800;
-    camera_status_t sensorStatus = ACaptureRequest_setEntry_i32(previewRequest,
-                                                                ACAMERA_SENSOR_SENSITIVITY, 1,
-                                                                &sensor);
-    Camera(sensorStatus)
-
-    const int64_t frameDuration = 30000000;
-    camera_status_t sensorFrameDurationStatus = ACaptureRequest_setEntry_i64(previewRequest,
-                                                                             ACAMERA_SENSOR_FRAME_DURATION,
-                                                                             1,
-                                                                             &frameDuration);
-    Camera(sensorFrameDurationStatus)
-
-    float lensAperture = 1.5;
-    camera_status_t lensApertureStatus = ACaptureRequest_setEntry_float(previewRequest,
-                                                                        ACAMERA_LENS_APERTURE, 1,
-                                                                        &lensAperture);
-    Camera(lensApertureStatus)
-
-//    int64_t frameDurationTime = 30000000;
-//    camera_status_t frameDurationStatus = ACaptureRequest_setEntry_i64(previewRequest,
-//                                                                 ACAMERA_SENSOR_FRAME_DURATION, 1,
-//                                                                 &frameDurationTime);
-//    Camera(frameDurationStatus)
-
-//    const uint8_t noiseMode = ACAMERA_NOISE_REDUCTION_MODE_MINIMAL;
-//    camera_status_t noiseReductionStatus = ACaptureRequest_setEntry_u8(previewRequest,
-//                                                                       ACAMERA_NOISE_REDUCTION_MODE,
-//                                                                       1, &noiseMode);
-//    Camera(noiseReductionStatus)
-
     // Create capture session
-    camera_status_t captureSessionStatus = ACameraDevice_createCaptureSession(cameraDevice,
-                                                                              captureSessionOutputContainer,
-                                                                              &sessionCallbacks,
-                                                                              &session);
-    Camera(captureSessionStatus)
-    // set repeating request
-    camera_status_t repeatingRequestStatus = ACameraCaptureSession_setRepeatingRequest(session,
-                                                                                       nullptr, 1,
-                                                                                       &previewRequest,
-                                                                                       nullptr);
-    Camera(repeatingRequestStatus)
+    ACameraDevice_createCaptureSession(cameraDevice, captureSessionOutputContainer, &sessionCallbacks, &session);
+
+    autoMode();
 }
 
 void closeCamera() {
@@ -645,6 +656,8 @@ void Java_com_demo_opengl_provider_CameraInterface_onSurfaceCreated(JNIEnv *jni,
                                      "uniform float u_contrast;\n"
                                      "uniform float u_brightness;\n"
                                      "uniform float u_highlight;\n"
+                                     "uniform float u_shadow;\n"
+                                     "uniform float u_awb; // awb 0 off and 1 on\n"
                                      "const float Epsilon = 1e-10;\n"
                                      "const float cellsPerRow = 8.0;\n"
                                      "const float cellSize = 0.125;\n"
@@ -713,6 +726,20 @@ void Java_com_demo_opengl_provider_CameraInterface_onSurfaceCreated(JNIEnv *jni,
                                      "outColor = mix(color.rgb, outColor,0.15555);\n" // last parameter ranges 0.0 to 1.0 -> 1.0 show lut color
                                      "return vec4(outColor,color.x);\n"
                                      "}\n"
+                                     "vec4 whiteBalance(vec4 source,float temp,float tint)\n"
+                                     "{\n"
+                                     "lowp vec3 warmFilter = vec3(0.93, 0.54, 0.0);\n"
+                                     "mediump mat3 RGBtoYIQ = mat3(0.299, 0.587, 0.114, 0.596, -0.274, -0.322, 0.212, -0.523, 0.311);\n"
+                                     "mediump mat3 YIQtoRGB = mat3(1.0, 0.956, 0.621, 1.0, -0.272, -0.647, 1.0, -1.105, 1.702);\n"
+                                     "mediump vec3 yiq = RGBtoYIQ * source.rgb;\n"
+                                     "yiq.b = clamp(yiq.b + tint*0.5226*0.1, -0.5226, 0.5226);\n"
+                                     "lowp vec3 rgb = YIQtoRGB * yiq;\n"
+                                     "lowp vec3 processed = vec3(\n"
+                                     "		(rgb.r < 0.5 ? (2.0 * rgb.r * warmFilter.r) : (1.0 - 2.0 * (1.0 - rgb.r) * (1.0 - warmFilter.r))),//adjusting temperature\n"
+                                     "		(rgb.g < 0.5 ? (2.0 * rgb.g * warmFilter.g) : (1.0 - 2.0 * (1.0 - rgb.g) * (1.0 - warmFilter.g))),\n"
+                                     "		(rgb.b < 0.5 ? (2.0 * rgb.b * warmFilter.b) : (1.0 - 2.0 * (1.0 - rgb.b) * (1.0 - warmFilter.b))));\n"
+                                     "return vec4(mix(rgb,processed,temp),source.a);\n"
+                                     "}\n"
                                      "void main()\n"
                                      "{\n"
                                      "vec4 frag = texture(tex,v_Chord);\n"
@@ -723,13 +750,19 @@ void Java_com_demo_opengl_provider_CameraInterface_onSurfaceCreated(JNIEnv *jni,
                                      "vec4 final = vec4(col_rgb.rgb,1.0);\n"
                                      "vec4 contrast = contrast(final,u_contrast);\n"
                                      "vec4 brightness = brightness(contrast,u_brightness);\n"
-                                     "float luminance = dot(brightness.rgb, vec3(0.3,0.3,0.3));\n"
-                                     "float shadowValue = 0.0;\n"
-                                     "float highlightValue = 0.0;\n"
-                                     "float shadow = clamp((pow(luminance, 1.0/(shadowValue+1.0)) + (-0.76)*pow(luminance, 2.0/(shadowValue+1.0))) - luminance, 0.0, 1.0);\n"
+                                     "float luminance = dot(brightness.rgb,vec3(0.3,0.3,0.3));\n"
+                                     "float shadow = clamp((pow(luminance, 1.0/(u_shadow + 1.0)) + (-0.76)*pow(luminance, 2.0/(u_shadow + 1.0))) - luminance, 0.0, 1.0);\n"
                                      "float highlight = clamp((1.0 - (pow(1.0-luminance, 1.0/(2.0-u_highlight)) + (-0.8)*pow(1.0-luminance, 2.0/(2.0-u_highlight)))) - luminance, -1.0, 0.0);\n"
-                                     "vec3 result = vec3(0.0, 0.0, 0.0) + ((luminance + shadow + highlight) - 0.0) * ((brightness.rgb - vec3(0.0, 0.0, 0.0))/(luminance - 0.0));\n"
+                                     "vec3 result = (luminance + shadow + highlight) * brightness.rgb / luminance;\n"
+                                     "if(u_awb == 0.0)\n"
+                                     "{\n"
                                      "fragColor = vec4(result.rgb,brightness.a);\n"
+                                     "}\n"
+                                     "else\n"
+                                     "{\n"
+                                     "vec4 awb = whiteBalance(vec4(result.rgb,brightness.a),0.00006 * (10000.0 - 5000.0),0.0);\n"
+                                     "fragColor = awb;\n"
+                                     "}\n"
                                      "}";
     __android_log_print(ANDROID_LOG_ERROR, "OpenGL version", "%s", glGetString(GL_VERSION));
     __android_log_print(ANDROID_LOG_ERROR, "OpenGL shader version", "%s",
@@ -798,6 +831,8 @@ void Java_com_demo_opengl_provider_CameraInterface_onSurfaceCreated(JNIEnv *jni,
     GLCall(contrastLocation = glGetUniformLocation(program, "u_contrast"))
     GLCall(brightnessLocation = glGetUniformLocation(program, "u_brightness"))
     GLCall(highLightLocation = glGetUniformLocation(program, "u_highlight"))
+    GLCall(shadowLocation = glGetUniformLocation(program, "u_shadow"))
+    GLCall(awbLocation = glGetUniformLocation(program, "u_awb"))
     GLCall(lutTextureLocation = glGetUniformLocation(program, "textureLut"))
 
     startCamera(jni, object);
@@ -819,7 +854,8 @@ Java_com_demo_opengl_provider_CameraInterface_onDrawFrame(JNIEnv *jni, jobject o
                                                           jfloat saturation,
                                                           jfloat contrast,
                                                           jfloat brightness,
-                                                          jfloat highlight) {
+                                                          jfloat highlight,
+                                                          jfloat shadow) {
     GLCall(glViewport(0, 0, windowWidth, windowHeight))
     GLCall(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT))
     GLCall(glClearColor(0, 0, 0, 1))
@@ -868,6 +904,8 @@ Java_com_demo_opengl_provider_CameraInterface_onDrawFrame(JNIEnv *jni, jobject o
     GLCall(glUniform1f(contrastLocation, contrast))
     GLCall(glUniform1f(brightnessLocation, brightness))
     GLCall(glUniform1f(highLightLocation, highlight))
+    GLCall(glUniform1f(shadowLocation, shadow))
+    GLCall(glUniform1f(awbLocation, applyAwb))
 
     GLCall(glBindBuffer(GL_ARRAY_BUFFER, arrayBuffer[0]))
     GLCall(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, arrayBuffer[1]))
@@ -886,5 +924,17 @@ Java_com_demo_opengl_provider_CameraInterface_onDrawFrame(JNIEnv *jni, jobject o
 
     GLCall(glDisableVertexAttribArray(positionHandle))
     GLCall(glDisableVertexAttribArray(chordsHandle))
+}
+
+void Java_com_demo_opengl_provider_CameraInterface_changeMode(JNIEnv *jni,
+                                                              jobject object,
+                                                              jint mode) {
+    if (mode == 0) {
+        autoMode();
+        applyAwb = 0;
+    } else if (mode == 1) {
+        detectionMode();
+        applyAwb = 1;
+    }
 }
 }

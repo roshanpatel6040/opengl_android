@@ -30,6 +30,10 @@ class CameraSurface @JvmOverloads constructor(context: Context, attributeSet: At
         renderer.changeHighlight(value)
     }
 
+    fun changeShadow(value: Float) {
+        renderer.changeShadow(value)
+    }
+
     override fun onTouchEvent(event: MotionEvent?): Boolean {
         val index = event?.actionIndex
         val pointerId = event?.getPointerId(index!!)
