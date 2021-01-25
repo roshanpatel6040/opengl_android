@@ -356,6 +356,9 @@ void cameraDetails(std::string cameraId, JNIEnv *env, jobject object) {
     ACameraMetadata_getConstEntry(cameraMetadata, ACAMERA_SENSOR_INFO_MAX_FRAME_DURATION, &entry);
     int64_t frameDuration = entry.data.i64[2];
     __android_log_print(ANDROID_LOG_DEBUG, "Camera frame duration", "%lli", frameDuration);
+
+    ACameraMetadata_getConstEntry(cameraMetadata, ACAMERA_CONTROL_AE_COMPENSATION_STEP, &entry);
+    __android_log_print(ANDROID_LOG_DEBUG, "Camera Compensation", "%i", entry.data.i32[6]);
 }
 
 void createEglContext(JNIEnv *env, jobject surface) {
@@ -447,6 +450,9 @@ void autoMode() {
     uint8_t controlAEMode = ACAMERA_CONTROL_AE_MODE_ON;
     ACaptureRequest_setEntry_u8(previewRequest, ACAMERA_CONTROL_AE_MODE, 1, &controlAEMode);
 
+    int32_t exposureCompensationValue = 0;
+    camera_status_t exposureCompensationStatus = ACaptureRequest_setEntry_i32(previewRequest, ACAMERA_CONTROL_AE_EXPOSURE_COMPENSATION, 1, &exposureCompensationValue);
+
     // set repeating request
     ACameraCaptureSession_setRepeatingRequest(session, nullptr, 1, &previewRequest, nullptr);
 }
@@ -488,6 +494,10 @@ void detectionMode() {
                                                                       1,
                                                                       &controlAEMode);
     Camera(controlModeAEStatus)
+
+    int32_t exposureCompensationValue = -12;
+    camera_status_t exposureCompensationStatus = ACaptureRequest_setEntry_i32(previewRequest, ACAMERA_CONTROL_AE_EXPOSURE_COMPENSATION, 1, &exposureCompensationValue);
+    Camera(exposureCompensationStatus)
 
     int32_t orientation = 90;
     camera_status_t jpegOrientationStatus = ACaptureRequest_setEntry_i32(previewRequest,
