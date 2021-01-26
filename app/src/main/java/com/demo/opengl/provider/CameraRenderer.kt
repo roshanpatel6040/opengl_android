@@ -88,7 +88,7 @@ class CameraRenderer(var context: Context) : GLSurfaceView.Renderer {
             val bmp =
                 Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
             bmp.copyPixelsFromBuffer(pixelBuffer)
-            bmp.compress(Bitmap.CompressFormat.PNG, 100, bos)
+            bmp.compress(Bitmap.CompressFormat.JPEG, 100, bos)
             bmp.recycle()
             Log.d(TAG, "saveImage() Image captured")
         } catch (e: Exception) {

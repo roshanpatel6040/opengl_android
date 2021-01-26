@@ -29,16 +29,14 @@
             android:gravity="center"
             android:orientation="vertical">
 
-            <androidx.cardview.widget.CardView
+            <com.google.android.material.card.MaterialCardView
                 android:id="@+id/cv_capture"
                 android:layout_width="@dimen/dimens_80dp"
                 android:layout_height="@dimen/dimens_80dp"
                 android:layout_margin="20dp"
-                android:background="?selectableItemBackground"
                 android:clickable="true"
                 android:focusable="true"
-                android:foreground="@drawable/ic_capture"
-                android:stateListAnimator="@animator/card_animator"
+                android:background="@drawable/ic_capture"
                 app:cardCornerRadius="40dp"
                 app:cardElevation="6dp" />
 
