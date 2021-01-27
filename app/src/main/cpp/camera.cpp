@@ -5,19 +5,17 @@
 #include <cstdio>
 #include <unistd.h>
 #include <jni.h>
-#include <EGL/egl.h>
 #include <cstdlib>
 #include <dirent.h>
+
+#include <EGL/egl.h>
 #include <GLES/gl.h>
+#include <GLES/glext.h>
 #include <GLES/glplatform.h>
+#include <GLES/egl.h>
 #include <GLES2/gl2.h>
 #include <GLES2/gl2platform.h>
 #include <GLES2/gl2ext.h>
-#include <string>
-#include <android/log.h>
-#include <iostream>
-#include <cassert>
-#include "stb_image/stb_image.cpp"
 #include "GLES3/gl32.h"
 #include "GLES3/gl3platform.h"
 #include "GLES3/gl3.h"
@@ -25,6 +23,12 @@
 #include "GLES3/gl3ext.h"
 #include "glm/glm.hpp"
 #include "glm/ext.hpp"
+
+#include <string>
+#include <android/log.h>
+#include <iostream>
+#include <cassert>
+#include "stb_image/stb_image.cpp"
 #include <android/asset_manager_jni.h>
 #include <android/asset_manager.h>
 #include "core/headers/Renderer.h"
@@ -450,8 +454,8 @@ void autoMode() {
     uint8_t controlAEMode = ACAMERA_CONTROL_AE_MODE_ON;
     ACaptureRequest_setEntry_u8(previewRequest, ACAMERA_CONTROL_AE_MODE, 1, &controlAEMode);
 
-    int32_t exposureCompensationValue = 0;
-    camera_status_t exposureCompensationStatus = ACaptureRequest_setEntry_i32(previewRequest, ACAMERA_CONTROL_AE_EXPOSURE_COMPENSATION, 1, &exposureCompensationValue);
+//    int32_t exposureCompensationValue = 0;
+//    camera_status_t exposureCompensationStatus = ACaptureRequest_setEntry_i32(previewRequest, ACAMERA_CONTROL_AE_EXPOSURE_COMPENSATION, 1, &exposureCompensationValue);
 
     // set repeating request
     ACameraCaptureSession_setRepeatingRequest(session, nullptr, 1, &previewRequest, nullptr);
@@ -495,9 +499,9 @@ void detectionMode() {
                                                                       &controlAEMode);
     Camera(controlModeAEStatus)
 
-//    int32_t exposureCompensationValue = -12;
-//    camera_status_t exposureCompensationStatus = ACaptureRequest_setEntry_i32(previewRequest, ACAMERA_CONTROL_AE_EXPOSURE_COMPENSATION, 1, &exposureCompensationValue);
-//    Camera(exposureCompensationStatus)
+    int32_t exposureCompensationValue = -12;
+    camera_status_t exposureCompensationStatus = ACaptureRequest_setEntry_i32(previewRequest, ACAMERA_CONTROL_AE_EXPOSURE_COMPENSATION, 1, &exposureCompensationValue);
+    Camera(exposureCompensationStatus)
 
     int32_t orientation = 90;
     camera_status_t jpegOrientationStatus = ACaptureRequest_setEntry_i32(previewRequest,
@@ -580,7 +584,7 @@ void startCamera(JNIEnv *env, jobject object) {
     // Create capture session
     ACameraDevice_createCaptureSession(cameraDevice, captureSessionOutputContainer, &sessionCallbacks, &session);
 
-    autoMode();
+    detectionMode();
 }
 
 void destroy() {
@@ -771,6 +775,11 @@ void Java_com_demo_opengl_provider_CameraInterface_onSurfaceCreated(JNIEnv *jni,
                                      "		(rgb.b < 0.5 ? (2.0 * rgb.b * warmFilter.b) : (1.0 - 2.0 * (1.0 - rgb.b) * (1.0 - warmFilter.b))));\n"
                                      "return vec4(mix(rgb,processed,temp),source.a);\n"
                                      "}\n"
+                                     "vec4 gamma(vec4 awb)\n"
+                                     "{\n"
+                                     "float gamma = 2.2;\n"
+                                     "return vec4(pow(awb.rgb, vec3(1.0/gamma)),awb.a);\n"
+                                     "}\n"
                                      "void main()\n"
                                      "{\n"
                                      "vec4 frag = texture(tex,v_Chord);\n"
@@ -787,7 +796,8 @@ void Java_com_demo_opengl_provider_CameraInterface_onSurfaceCreated(JNIEnv *jni,
                                      "vec3 result = (luminance + shadow + highlight) * brightness.rgb / luminance;\n"
                                      "if(u_awb == 0.0)\n"
                                      "{\n"
-                                     "fragColor = vec4(result.rgb,brightness.a);\n"
+                                     "vec4 awb = vec4(result.rgb,brightness.a);\n"
+                                     "fragColor = awb;\n"
                                      "}\n"
                                      "else\n"
                                      "{\n"
@@ -799,7 +809,7 @@ void Java_com_demo_opengl_provider_CameraInterface_onSurfaceCreated(JNIEnv *jni,
     __android_log_print(ANDROID_LOG_ERROR, "OpenGL shader version", "%s",
                         glGetString(GL_SHADING_LANGUAGE_VERSION));
     GLCall(glDisable(GL_DITHER))
-//    GLCall(glEnable(GL_FRAMEBUFFER_SRGB_EXT))
+    GLCall(glEnable(GL_FRAMEBUFFER_SRGB_EXT))
     GLCall(program = glCreateProgram())
     GLCall(Shader shader = Shader(program, vertexShaderCode, fragmentShaderCode))
 

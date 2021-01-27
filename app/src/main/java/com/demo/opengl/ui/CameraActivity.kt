@@ -104,7 +104,7 @@ class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener, Vie
                 surface.changeContrast(progress.div(10.0f))
             }
             R.id.seekBar_Brightness -> {
-                surface.changeBrightness(progress.div(10.0f).minus(0.5f))
+                surface.changeBrightness(progress.div(10.0f))
             }
             R.id.seekBar_highlight -> {
                 surface.changeHighlight(progress.div(10.0f))
