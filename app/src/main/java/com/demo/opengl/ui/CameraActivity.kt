@@ -34,14 +34,9 @@ class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener, Vie
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.setFlags(WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS, WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS)
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        val flags = View.SYSTEM_UI_FLAG_LAYOUT_STABLE or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
-                View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
-                View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_FULLSCREEN or
-                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-        window.decorView.systemUiVisibility = flags
         setContentView(R.layout.activity_camera)
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+//        window.setFlags(WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS, WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS)
 
         initView()
     }
@@ -67,8 +62,8 @@ class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener, Vie
         surface.onResume()
 
         CameraInterface.openCamera()
-        // Set camera mode to auto initially
-        changeMode(ProviderConst.AUTO_MODE)
+        // Set camera mode to detection mode initially
+        changeMode(ProviderConst.DETECTION_MODE)
     }
 
     override fun onPause() {
@@ -91,10 +86,10 @@ class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener, Vie
     private fun changeMode(mode: Int) {
         when (mode) {
             ProviderConst.AUTO_MODE -> {
-                btn_mode.text = getString(R.string.label_auto)
+                btn_mode.text = getString(R.string.label_detection)
             }
             ProviderConst.DETECTION_MODE -> {
-                btn_mode.text = getString(R.string.label_detection)
+                btn_mode.text = getString(R.string.label_auto)
             }
         }
         cameraModeImpl.changeMode(mode)

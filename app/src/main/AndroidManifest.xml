@@ -21,15 +21,18 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
-        <activity android:name=".ui.PreviewActivity"></activity>
-        <activity android:name=".ui.MainActivity" />
-        <activity android:name=".ui.CameraActivity">
+        <activity
+            android:name=".ui.IntroActivity"
+            android:theme="@style/FullScreen">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity android:name=".ui.PreviewActivity" />
+        <activity android:name=".ui.MainActivity" />
+        <activity android:name=".ui.CameraActivity" />
     </application>
 
 </manifest>

@@ -4,7 +4,9 @@
     <string name="label_contrast">Contrast</string>
     <string name="label_saturation">Saturation</string>
     <string name="label_highlight">Highlight</string>
-    <string name="label_detection">Detection</string>
-    <string name="label_auto">Auto</string>
+    <string name="label_detection">Switch to Detection</string>
+    <string name="label_auto">Switch to Auto</string>
     <string name="label_shadow">Shadow</string>
+    <string name="message_camera_not_supported">This device doesn\'t support full camera hardware access.</string>
+    <string name="label_swipe_adjust">Swipe up to adjust</string>
 </resources>

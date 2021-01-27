@@ -495,9 +495,9 @@ void detectionMode() {
                                                                       &controlAEMode);
     Camera(controlModeAEStatus)
 
-    int32_t exposureCompensationValue = -12;
-    camera_status_t exposureCompensationStatus = ACaptureRequest_setEntry_i32(previewRequest, ACAMERA_CONTROL_AE_EXPOSURE_COMPENSATION, 1, &exposureCompensationValue);
-    Camera(exposureCompensationStatus)
+//    int32_t exposureCompensationValue = -12;
+//    camera_status_t exposureCompensationStatus = ACaptureRequest_setEntry_i32(previewRequest, ACAMERA_CONTROL_AE_EXPOSURE_COMPENSATION, 1, &exposureCompensationValue);
+//    Camera(exposureCompensationStatus)
 
     int32_t orientation = 90;
     camera_status_t jpegOrientationStatus = ACaptureRequest_setEntry_i32(previewRequest,
