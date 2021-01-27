@@ -583,12 +583,26 @@ void startCamera(JNIEnv *env, jobject object) {
     autoMode();
 }
 
-void closeCamera() {
+void destroy() {
+    ANativeWindow_release(window);
+    ANativeWindow_release(imageWindow);
     ACameraMetadata_free(cameraMetadata);
     ACaptureRequest_free(previewRequest);
-    ACameraDevice_close(cameraDevice);
+//    ACameraDevice_close(cameraDevice);
+    ACaptureRequest_free(captureRequest);
     ACameraCaptureSession_close(session);
+    ACaptureSessionOutputContainer_remove(captureSessionOutputContainer, imageOutput);
+    ACaptureSessionOutputContainer_remove(captureSessionOutputContainer, captureSessionOutput);
+    ACaptureSessionOutputContainer_free(captureSessionOutputContainer);
+    ACaptureSessionOutputContainer_free(captureImageSessionOutputContainer);
+    ACameraOutputTarget_free(imageTarget);
+    ACameraOutputTarget_free(outputTarget);
+    AImageReader_delete(imageReader);
     ACameraManager_delete(cameraManager);
+}
+
+void closeCamera() {
+    ACameraDevice_close(cameraDevice);
 }
 
 extern "C" {
@@ -597,8 +611,15 @@ void Java_com_demo_opengl_provider_CameraInterface_initialize(JNIEnv *jni, jobje
     openCamera(jni, object);
 }
 
-void
-Java_com_demo_opengl_provider_CameraInterface_changeExposure(JNIEnv *jni, jobject object, jint exposure) {
+void Java_com_demo_opengl_provider_CameraInterface_openCamera(JNIEnv *jni, jobject object) {
+    openCamera(jni, object);
+}
+
+void Java_com_demo_opengl_provider_CameraInterface_closeCamera(JNIEnv *jni, jobject object) {
+    closeCamera();
+}
+
+void Java_com_demo_opengl_provider_CameraInterface_changeExposure(JNIEnv *jni, jobject object, jint exposure) {
     int64_t sensorExposureTime = exposure;
     camera_status_t expTimeStatus = ACaptureRequest_setEntry_i64(previewRequest,
                                                                  ACAMERA_SENSOR_EXPOSURE_TIME, 1,
@@ -612,7 +633,7 @@ Java_com_demo_opengl_provider_CameraInterface_changeExposure(JNIEnv *jni, jobjec
 }
 
 void Java_com_demo_opengl_provider_CameraInterface_destroy(JNIEnv *jni, jobject object) {
-    closeCamera();
+    destroy();
 }
 
 void Java_com_demo_opengl_provider_CameraInterface_capture(JNIEnv *jni, jobject object) {
@@ -936,9 +957,7 @@ Java_com_demo_opengl_provider_CameraInterface_onDrawFrame(JNIEnv *jni, jobject o
     GLCall(glDisableVertexAttribArray(chordsHandle))
 }
 
-void Java_com_demo_opengl_provider_CameraInterface_changeMode(JNIEnv *jni,
-                                                              jobject object,
-                                                              jint mode) {
+void Java_com_demo_opengl_provider_CameraInterface_changeMode(JNIEnv *jni, jobject object, jint mode) {
     if (mode == 0) {
         autoMode();
         applyAwb = 0;

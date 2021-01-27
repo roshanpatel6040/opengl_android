@@ -9,11 +9,9 @@ import android.opengl.GLSurfaceView
 import android.os.Environment
 import android.util.Log
 import android.view.Surface
-import android.widget.Toast
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.io.BufferedOutputStream
 import java.io.File
 import java.io.FileOutputStream
@@ -27,6 +25,8 @@ class CameraRenderer(var context: Context) : GLSurfaceView.Renderer {
     companion object {
         private const val TAG = "CameraRenderer"
     }
+
+    private var captureListener: CaptureListener? = null
 
     private var capture = false
 
@@ -79,7 +79,11 @@ class CameraRenderer(var context: Context) : GLSurfaceView.Renderer {
         pixelBuffer.rewind()
 
         var bos: BufferedOutputStream? = null
-        val file = File(Environment.getExternalStorageDirectory(), "/pro/opengl.png")
+        val directory = File(Environment.getExternalStorageDirectory(), "Pro")
+        if (!directory.exists()) {
+            directory.mkdirs()
+        }
+        val file = File(directory.absolutePath, "${System.currentTimeMillis()}.jpg")
         if (!file.exists()) {
             file.createNewFile()
         }
@@ -91,8 +95,18 @@ class CameraRenderer(var context: Context) : GLSurfaceView.Renderer {
             bmp.compress(Bitmap.CompressFormat.JPEG, 100, bos)
             bmp.recycle()
             Log.d(TAG, "saveImage() Image captured")
+            if (captureListener == null) {
+                throw Exception("Set capture image listener")
+            } else {
+                captureListener?.onImageCaptured(file)
+            }
         } catch (e: Exception) {
             Log.e(TAG, "saveImage() $e")
+            if (captureListener == null) {
+                throw Exception("Set capture image listener")
+            } else {
+                captureListener?.onCapturedFailed(e)
+            }
         } finally {
             bos?.close()
         }
@@ -127,9 +141,6 @@ class CameraRenderer(var context: Context) : GLSurfaceView.Renderer {
                 )
                 CoroutineScope(Dispatchers.Default).launch {
                     saveImage(pixelBuffer)
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(context, "Captured", Toast.LENGTH_SHORT).show()
-                    }
                 }
             }
         }
@@ -178,6 +189,10 @@ class CameraRenderer(var context: Context) : GLSurfaceView.Renderer {
 
     fun changeShadow(value: Float) {
         shadow = value
+    }
+
+    fun setCaptureListener(listener: CaptureListener?) {
+        this.captureListener = listener
     }
 
 }

@@ -1,18 +1,28 @@
 package com.demo.opengl.ui
 
+import android.content.Intent
 import android.os.Bundle
 import android.view.View
 import android.view.WindowManager
 import android.widget.SeekBar
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.net.toUri
+import androidx.core.view.isVisible
 import com.demo.opengl.R
 import com.demo.opengl.provider.CameraInterface
 import com.demo.opengl.provider.CameraModeImpl
+import com.demo.opengl.provider.CaptureListener
 import com.demo.opengl.provider.ProviderConst
+import com.demo.opengl.utils.Constants
 import com.google.android.material.bottomsheet.BottomSheetBehavior
+import com.google.android.material.snackbar.Snackbar
 import kotlinx.android.synthetic.main.activity_camera.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import java.io.File
 
-class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener, View.OnClickListener {
+class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener, View.OnClickListener, CaptureListener {
 
     init {
         System.loadLibrary("cameraCpp")
@@ -38,11 +48,9 @@ class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener, Vie
 
     private fun initView() {
         CameraInterface.initialize()
+        surface.getRenderer().setCaptureListener(this)
         sheet = BottomSheetBehavior.from(ll_bottomSheet)
         sheet.addBottomSheetCallback(bottomSheetCallback)
-
-        // Set camera mode to auto initially
-        changeMode(ProviderConst.AUTO_MODE)
 
         cv_capture.setOnClickListener(this)
         seekBar_Brightness.setOnSeekBarChangeListener(this)
@@ -51,20 +59,27 @@ class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener, Vie
         seekBar_highlight.setOnSeekBarChangeListener(this)
         seekBar_shadow.setOnSeekBarChangeListener(this)
         btn_mode.setOnClickListener(this)
+        img_captured.setOnClickListener(this)
     }
 
     override fun onResume() {
         super.onResume()
         surface.onResume()
+
+        CameraInterface.openCamera()
+        // Set camera mode to auto initially
+        changeMode(ProviderConst.AUTO_MODE)
     }
 
     override fun onPause() {
         super.onPause()
         surface.onPause()
+        CameraInterface.closeCamera();
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        surface.getRenderer().setCaptureListener(null)
         CameraInterface.destroy()
         sheet.removeBottomSheetCallback(bottomSheetCallback)
     }
@@ -121,6 +136,20 @@ class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener, Vie
         }
     }
 
+    override fun onImageCaptured(imageFile: File) {
+        CoroutineScope(Dispatchers.Main).launch {
+            img_captured.isVisible = true
+            img_captured.setImageURI(imageFile.toUri())
+            img_captured.tag = imageFile.path
+        }
+    }
+
+    override fun onCapturedFailed(e: Exception) {
+        CoroutineScope(Dispatchers.Main).launch {
+            Snackbar.make(findViewById(android.R.id.content), "Failed to capture", Snackbar.LENGTH_SHORT).show()
+        }
+    }
+
     override fun onClick(v: View) {
         when (v.id) {
             R.id.cv_capture -> {
@@ -134,6 +163,10 @@ class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener, Vie
                     mode = ProviderConst.AUTO_MODE
                 }
                 changeMode(mode)
+            }
+            R.id.img_captured -> {
+                val intent = Intent(this, PreviewActivity::class.java).putExtra(Constants.PREVIEW_PATH, img_captured.tag as String)
+                startActivity(intent)
             }
         }
     }

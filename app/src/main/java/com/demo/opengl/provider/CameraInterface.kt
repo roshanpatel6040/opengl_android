@@ -5,6 +5,8 @@ import android.view.Surface
 object CameraInterface {
 
     external fun initialize()
+    external fun openCamera()
+    external fun closeCamera()
     external fun destroy()
     external fun capture()
     external fun changeExposure(exposure: Int)
