@@ -38,11 +38,9 @@ class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener, Vie
     }
 
     lateinit var sheet: BottomSheetBehavior<View>
-
     private val cameraModeImpl: CameraModeImpl by lazy { CameraModeImpl() }
-
     private val mLock = Object()
-
+    private var isImageProcessing = false
     private val detector: FaceDetector by lazy {
         val options = FaceDetectorOptions.Builder()
             .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
@@ -62,6 +60,7 @@ class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener, Vie
     }
 
     private fun initView() {
+        setup()
         CameraInterface.initialize()
         surface.getRenderer().setCaptureListener(this)
         sheet = BottomSheetBehavior.from(ll_bottomSheet)
@@ -100,13 +99,27 @@ class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener, Vie
     }
 
     fun runDetection(byteArray: ByteArray) {
+        Log.d(TAG, "runDetection() ${byteArray.size}")
         synchronized(mLock) {
-            val image = InputImage.fromByteArray(byteArray, 640, 480, 90, InputImage.IMAGE_FORMAT_YUV_420_888)
-            detector.process(image).addOnSuccessListener {
-                Log.d(TAG, "runDetection() ${it.size}")
+            if (isImageProcessing) {
+                return
+            }
+            isImageProcessing = true
+            CoroutineScope(Dispatchers.Default).launch {
+                try {
+                    val image = InputImage.fromByteArray(byteArray, 640, 480, 90, InputImage.IMAGE_FORMAT_YUV_420_888)
+                    detector.process(image).addOnSuccessListener {
+                        Log.d(TAG, "runDetection() ${it.size}")
+                        isImageProcessing = false
 
-            }.addOnFailureListener {
-                Log.e(TAG, "runDetection() $it")
+                    }.addOnFailureListener {
+                        Log.e(TAG, "runDetection() $it")
+                        isImageProcessing = false
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "runDetection() $e")
+                    isImageProcessing = false
+                }
             }
         }
     }
@@ -197,4 +210,6 @@ class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener, Vie
             }
         }
     }
+
+    external fun setup()
 }

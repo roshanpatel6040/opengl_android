@@ -95,6 +95,10 @@ ACameraOutputTarget *captureOutputTarget;
 ACameraMetadata *cameraMetadata;
 ACameraMetadata_const_entry entry = {0};
 
+JavaVM *javaVM = nullptr;
+jclass activityClass;
+jobject activityObj;
+
 #define Camera(x) \
     if(x != ACAMERA_OK){ \
         __android_log_print(ANDROID_LOG_ERROR,"Camera status","Line: %i, error: %i",__LINE__,x); \
@@ -173,13 +177,44 @@ static void imageCallback(void *context, AImageReader *reader) {
         __android_log_print(ANDROID_LOG_ERROR, "Camera imageCallback", "%d", status);
     }
 
-//    std::thread processor([=]() {
-    __android_log_print(ANDROID_LOG_DEBUG, "Camera", "%s", "Image available");
-    AImage_delete(image);
+    std::thread processor([=]() {
+//    __android_log_print(ANDROID_LOG_DEBUG, "Camera", "%s", "Image available");
 //        uint8_t *data = nullptr;
 //        int len = 0;
 //        AImage_getPlaneData(image, 0, &data, &len);
-//
+
+        int32_t planes;
+        uint8_t *y = nullptr;
+        uint8_t *u = nullptr;
+        uint8_t *v = nullptr;
+        int yl = 0;
+        int ul = 0;
+        int vl = 0;
+        AImage_getNumberOfPlanes(image, &planes);
+        AImage_getPlaneData(image, 0, &y, &yl);
+        AImage_getPlaneData(image, 1, &u, &ul);
+        AImage_getPlaneData(image, 2, &v, &vl);
+        __android_log_print(ANDROID_LOG_DEBUG, "Camera", "%d %d %d %d", planes, yl, ul, vl);
+
+        AImage_delete(image);
+
+        uint8_t *yuvData = (uint8_t *) calloc((yl + ul + vl),sizeof(uint8_t));
+        memcpy(yuvData, y, yl);
+        memcpy(yuvData, u, ul);
+        memcpy(yuvData, v, vl);
+
+        JNIEnv *env;
+        javaVM->AttachCurrentThread(&env, nullptr);
+        jmethodID methodId = (*env).GetMethodID(activityClass, "runDetection", "([B)V");
+
+        jbyteArray byteArray = env->NewByteArray(yl + ul + vl);
+        (*env).SetByteArrayRegion(byteArray, 0, yl + ul + vl, reinterpret_cast<const jbyte *>(yuvData));
+        (*env).CallVoidMethod(activityObj, methodId, byteArray);
+
+//    env->ReleaseByteArrayElements(byteArray, reinterpret_cast<jbyte *>(data), JNI_ABORT);
+        env->DeleteLocalRef(byteArray);
+        javaVM->DetachCurrentThread();
+
 //        const char *dirName = "/storage/emulated/0/pro/";
 //        DIR *dir = opendir(dirName);
 //        if (dir) {
@@ -196,13 +231,12 @@ static void imageCallback(void *context, AImageReader *reader) {
 //        fwrite(data, 1, len, imageFile);
 //        fclose(imageFile);
 //        __android_log_print(ANDROID_LOG_DEBUG, "Camera", "%s", "Image saved");
-//        AImage_delete(image);
-//    });
-//    processor.detach();
+    });
+    processor.detach();
 }
 
 void createJpegReader() {
-    media_status_t status = AImageReader_new(640, 480, AIMAGE_FORMAT_JPEG, 2, &imageReader);
+    media_status_t status = AImageReader_new(640, 480, AIMAGE_FORMAT_YUV_420_888, 2, &imageReader);
     if (status != AMEDIA_OK) {
         __android_log_print(ANDROID_LOG_ERROR, "Camera Reader", "%d", status);
     }
@@ -503,18 +537,20 @@ void startCamera(JNIEnv *env, jobject object) {
     Camera(ACameraDevice_createCaptureRequest(cameraDevice, TEMPLATE_PREVIEW, &previewRequest))
 
     // Create capture request
-//    Camera(ACameraDevice_createCaptureRequest(cameraDevice, TEMPLATE_STILL_CAPTURE, &captureRequest))
+    Camera(ACameraDevice_createCaptureRequest(cameraDevice, TEMPLATE_STILL_CAPTURE, &captureRequest))
 
-    // Prepare outputs for session
+    // Prepare preview output
     Camera(ACaptureSessionOutput_create(previewWindow, &previewSessionOutput))
     Camera(ACaptureSessionOutputContainer_add(previewSessionOutputContainer, previewSessionOutput))
     Camera(ACameraOutputTarget_create(previewWindow, &previewOutputTarget))
     Camera(ACaptureRequest_addTarget(previewRequest, previewOutputTarget))
 
-    // Image reader session output
+    // Prepare image reader output
     Camera(ACaptureSessionOutput_create(imageWindow, &captureSessionOutput))
     Camera(ACaptureSessionOutputContainer_add(previewSessionOutputContainer, captureSessionOutput))
     Camera(ACameraOutputTarget_create(imageWindow, &captureOutputTarget))
+    // Image reader output is set to preview request because we need ImageReader with preview surface
+    // To Setup image reader with the capture request create a capture request and add target to capture request instead of Preview request
     Camera(ACaptureRequest_addTarget(previewRequest, captureOutputTarget))
 
     // Create capture session
@@ -524,6 +560,7 @@ void startCamera(JNIEnv *env, jobject object) {
 }
 
 void destroy() {
+    ACameraCaptureSession_stopRepeating(session);
     ANativeWindow_release(previewWindow);
     ANativeWindow_release(imageWindow);
     ACameraMetadata_free(cameraMetadata);
@@ -546,6 +583,14 @@ void closeCamera() {
 }
 
 extern "C" {
+
+void Java_com_demo_opengl_ui_CameraActivity_setup(JNIEnv *jni, jobject object) {
+    jni->GetJavaVM(&javaVM);
+    jclass cls = jni->GetObjectClass(object);
+    activityClass = (jclass) jni->NewGlobalRef(cls);
+    activityObj = jni->NewGlobalRef(object);
+}
+
 void Java_com_demo_opengl_provider_CameraInterface_initialize(JNIEnv *jni, jobject object) {
     cameraManager = ACameraManager_create();
     openCamera(jni, object);
