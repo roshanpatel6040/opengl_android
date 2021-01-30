@@ -76,7 +76,6 @@ GLuint shadowLocation;
 GLuint awbLocation;
 GLuint textureLutReferenceID;
 GLuint lutTextureLocation;
-
 float applyAwb = 0;
 
 ACameraManager *cameraManager;
@@ -84,15 +83,15 @@ ACameraDevice *cameraDevice;
 ACaptureRequest *previewRequest;
 ACaptureRequest *captureRequest;
 ACameraCaptureSession *session;
-ANativeWindow *window;
+ANativeWindow *previewWindow;
 ANativeWindow *imageWindow;
 AImageReader *imageReader;
+ACaptureSessionOutput *previewSessionOutput;
 ACaptureSessionOutput *captureSessionOutput;
-ACaptureSessionOutput *imageOutput;
+ACaptureSessionOutputContainer *previewSessionOutputContainer;
 ACaptureSessionOutputContainer *captureSessionOutputContainer;
-ACaptureSessionOutputContainer *captureImageSessionOutputContainer;
-ACameraOutputTarget *outputTarget;
-ACameraOutputTarget *imageTarget;
+ACameraOutputTarget *previewOutputTarget;
+ACameraOutputTarget *captureOutputTarget;
 ACameraMetadata *cameraMetadata;
 ACameraMetadata_const_entry entry = {0};
 
@@ -173,57 +172,49 @@ static void imageCallback(void *context, AImageReader *reader) {
     if (status != AMEDIA_OK) {
         __android_log_print(ANDROID_LOG_ERROR, "Camera imageCallback", "%d", status);
     }
-    std::thread processor([=]() {
 
-        uint8_t *data = nullptr;
-        int len = 0;
-        AImage_getPlaneData(image, 0, &data, &len);
-
-        const char *dirName = "/storage/emulated/0/pro/";
-        DIR *dir = opendir(dirName);
-        if (dir) {
-            closedir(dir);
-        } else {
-            std::string command = "mkdir -p ";
-            command += dirName;
-            system(command.c_str());
-        }
-
-        std::string fileName = dirName;
-        fileName += "preview.jpg";
-        FILE *imageFile = std::fopen(fileName.c_str(), "wb");
-        fwrite(data, 1, len, imageFile);
-        fclose(imageFile);
-        __android_log_print(ANDROID_LOG_DEBUG, "Camera", "%s", "Image saved");
-        AImage_delete(image);
-    });
-    processor.detach();
+//    std::thread processor([=]() {
+    __android_log_print(ANDROID_LOG_DEBUG, "Camera", "%s", "Image available");
+    AImage_delete(image);
+//        uint8_t *data = nullptr;
+//        int len = 0;
+//        AImage_getPlaneData(image, 0, &data, &len);
+//
+//        const char *dirName = "/storage/emulated/0/pro/";
+//        DIR *dir = opendir(dirName);
+//        if (dir) {
+//            closedir(dir);
+//        } else {
+//            std::string command = "mkdir -p ";
+//            command += dirName;
+//            system(command.c_str());
+//        }
+//
+//        std::string fileName = dirName;
+//        fileName += "preview.jpg";
+//        FILE *imageFile = std::fopen(fileName.c_str(), "wb");
+//        fwrite(data, 1, len, imageFile);
+//        fclose(imageFile);
+//        __android_log_print(ANDROID_LOG_DEBUG, "Camera", "%s", "Image saved");
+//        AImage_delete(image);
+//    });
+//    processor.detach();
 }
 
-AImageReader *createJpegReader() {
-    AImageReader *reader = nullptr;
-    media_status_t status = AImageReader_new(1920, 1080, AIMAGE_FORMAT_JPEG,
-                                             4, &reader);
-
+void createJpegReader() {
+    media_status_t status = AImageReader_new(640, 480, AIMAGE_FORMAT_JPEG, 2, &imageReader);
     if (status != AMEDIA_OK) {
         __android_log_print(ANDROID_LOG_ERROR, "Camera Reader", "%d", status);
     }
-
     AImageReader_ImageListener listener{
             .context = nullptr,
             .onImageAvailable = imageCallback,
     };
-
-    AImageReader_setImageListener(reader, &listener);
-
-    return reader;
+    AImageReader_setImageListener(imageReader, &listener);
 }
 
-ANativeWindow *createSurface(AImageReader *reader) {
-    ANativeWindow *nativeWindow;
-    AImageReader_getWindow(reader, &nativeWindow);
-
-    return nativeWindow;
+void createSurface() {
+    AImageReader_getWindow(imageReader, &imageWindow);
 }
 
 void drawTriangle() {
@@ -295,7 +286,7 @@ string getCameraId() {
         ACameraMetadata_getConstEntry(metaData, ACAMERA_LENS_FACING, &lensInfo);
 
         auto facing = static_cast<acamera_metadata_enum_android_lens_facing_t>(lensInfo.data.u8[0]);
-        if (facing == ACAMERA_LENS_FACING_BACK) {
+        if (facing == ACAMERA_LENS_FACING_FRONT) {
             backFacingId = id;
             break;
         }
@@ -397,8 +388,8 @@ void createEglContext(JNIEnv *env, jobject surface) {
     if (eglContext == nullptr) {
         __android_log_print(ANDROID_LOG_ERROR, "Egl error", "%s", "No context");
     }
-    window = ANativeWindow_fromSurface(env, surface);
-    EGLCall(eglSurface = eglCreateWindowSurface(eglDisplay, eglConfig, window, nullptr))
+    previewWindow = ANativeWindow_fromSurface(env, surface);
+    EGLCall(eglSurface = eglCreateWindowSurface(eglDisplay, eglConfig, previewWindow, nullptr))
     if (eglSurface == EGL_NO_SURFACE) {
         __android_log_print(ANDROID_LOG_ERROR, "Egl error", "%s", "Unable to create surface");
         int error = eglGetError();
@@ -407,7 +398,7 @@ void createEglContext(JNIEnv *env, jobject surface) {
                 __android_log_print(ANDROID_LOG_ERROR, "Egl error", "%s", "Bad config");
                 break;
             case EGL_BAD_NATIVE_WINDOW:
-                __android_log_print(ANDROID_LOG_ERROR, "Egl error", "%s", "Bad window");
+                __android_log_print(ANDROID_LOG_ERROR, "Egl error", "%s", "Bad previewWindow");
                 break;
             case EGL_BAD_ALLOC:
                 __android_log_print(ANDROID_LOG_ERROR, "Egl error", "%s", "Bad allocation");
@@ -427,180 +418,125 @@ void createEglContext(JNIEnv *env, jobject surface) {
 void openCamera(JNIEnv *env, jobject object) {
     string cameraID = getCameraId();
     // Open camera
-    camera_status_t openCameraStatus = ACameraManager_openCamera(cameraManager,
-                                                                 cameraID.c_str(),
-                                                                 &stateCallbacks, &cameraDevice);
-    Camera(openCameraStatus)
-
+    Camera(ACameraManager_openCamera(cameraManager, cameraID.c_str(), &stateCallbacks, &cameraDevice))
     cameraDetails(cameraID, env, object);
 }
 
 void captureImage() {
-    camera_status_t captureStatus = ACameraCaptureSession_capture(session, &captureCallbacks, 1,
-                                                                  &captureRequest, nullptr);
-    Camera(captureStatus)
+    Camera(ACameraCaptureSession_capture(session, &captureCallbacks, 1, &captureRequest, nullptr))
 }
 
 void autoMode() {
     uint8_t controlMode = ACAMERA_CONTROL_MODE_AUTO;
-    ACaptureRequest_setEntry_u8(previewRequest, ACAMERA_CONTROL_MODE, 1, &controlMode);
+    Camera(ACaptureRequest_setEntry_u8(previewRequest, ACAMERA_CONTROL_MODE, 1, &controlMode))
 
     uint8_t controlAfMode = ACAMERA_CONTROL_AF_MODE_CONTINUOUS_PICTURE;
-    ACaptureRequest_setEntry_u8(previewRequest, ACAMERA_CONTROL_AF_MODE, 1, &controlAfMode);
+    Camera(ACaptureRequest_setEntry_u8(previewRequest, ACAMERA_CONTROL_AF_MODE, 1, &controlAfMode))
 
     uint8_t controlAWBMode = ACAMERA_CONTROL_AWB_MODE_AUTO;
-    ACaptureRequest_setEntry_u8(previewRequest, ACAMERA_CONTROL_AWB_MODE, 1, &controlAWBMode);
+    Camera(ACaptureRequest_setEntry_u8(previewRequest, ACAMERA_CONTROL_AWB_MODE, 1, &controlAWBMode))
 
     uint8_t controlAEMode = ACAMERA_CONTROL_AE_MODE_ON;
-    ACaptureRequest_setEntry_u8(previewRequest, ACAMERA_CONTROL_AE_MODE, 1, &controlAEMode);
+    Camera(ACaptureRequest_setEntry_u8(previewRequest, ACAMERA_CONTROL_AE_MODE, 1, &controlAEMode))
 
 //    int32_t exposureCompensationValue = 0;
-//    camera_status_t exposureCompensationStatus = ACaptureRequest_setEntry_i32(previewRequest, ACAMERA_CONTROL_AE_EXPOSURE_COMPENSATION, 1, &exposureCompensationValue);
+//    Camera(ACaptureRequest_setEntry_i32(previewRequest, ACAMERA_CONTROL_AE_EXPOSURE_COMPENSATION, 1, &exposureCompensationValue))
 
     // set repeating request
-    ACameraCaptureSession_setRepeatingRequest(session, nullptr, 1, &previewRequest, nullptr);
+    Camera(ACameraCaptureSession_setRepeatingRequest(session, nullptr, 1, &previewRequest, nullptr))
 }
 
 void detectionMode() {
     uint8_t controlMode = ACAMERA_CONTROL_MODE_AUTO;
-    camera_status_t controlModeStatus = ACaptureRequest_setEntry_u8(previewRequest,
-                                                                    ACAMERA_CONTROL_MODE,
-                                                                    1,
-                                                                    &controlMode);
-    Camera(controlModeStatus)
+    Camera(ACaptureRequest_setEntry_u8(previewRequest, ACAMERA_CONTROL_MODE, 1, &controlMode))
 
     uint8_t controlAfMode = ACAMERA_CONTROL_AF_MODE_CONTINUOUS_PICTURE;
-    camera_status_t controlModeAFStatus = ACaptureRequest_setEntry_u8(previewRequest,
-                                                                      ACAMERA_CONTROL_AF_MODE,
-                                                                      1,
-                                                                      &controlAfMode);
-    Camera(controlModeAFStatus)
+    Camera(ACaptureRequest_setEntry_u8(previewRequest, ACAMERA_CONTROL_AF_MODE, 1, &controlAfMode))
 
     uint8_t controlAWBMode = ACAMERA_CONTROL_AWB_MODE_AUTO;
-    camera_status_t controlModeAWBStatus = ACaptureRequest_setEntry_u8(previewRequest,
-                                                                       ACAMERA_CONTROL_AWB_MODE,
-                                                                       1,
-                                                                       &controlAWBMode);
-    Camera(controlModeAWBStatus)
+    Camera(ACaptureRequest_setEntry_u8(previewRequest, ACAMERA_CONTROL_AWB_MODE, 1, &controlAWBMode))
 
     const uint8_t correctionMode = ACAMERA_COLOR_CORRECTION_MODE_TRANSFORM_MATRIX;
-    camera_status_t colorCorrectStatus = ACaptureRequest_setEntry_u8(previewRequest, ACAMERA_COLOR_CORRECTION_MODE, 1, &correctionMode);
-    Camera(colorCorrectStatus)
+    Camera(ACaptureRequest_setEntry_u8(previewRequest, ACAMERA_COLOR_CORRECTION_MODE, 1, &correctionMode))
 
     const float gainValues[] = {1.0, 0.0, 0.0, 0.0};
-    camera_status_t colorGainStatus = ACaptureRequest_setEntry_float(previewRequest, ACAMERA_COLOR_CORRECTION_GAINS, 1, reinterpret_cast<const float *>(&gainValues));
-    Camera(colorGainStatus)
+    Camera(ACaptureRequest_setEntry_float(previewRequest, ACAMERA_COLOR_CORRECTION_GAINS, 1, reinterpret_cast<const float *>(&gainValues)))
 
     // Turn off AE to apply sensor sensitivity and exposure time
     uint8_t controlAEMode = ACAMERA_CONTROL_AE_MODE_OFF;
-    camera_status_t controlModeAEStatus = ACaptureRequest_setEntry_u8(previewRequest,
-                                                                      ACAMERA_CONTROL_AE_MODE,
-                                                                      1,
-                                                                      &controlAEMode);
-    Camera(controlModeAEStatus)
+    Camera(ACaptureRequest_setEntry_u8(previewRequest, ACAMERA_CONTROL_AE_MODE, 1, &controlAEMode))
 
     int32_t exposureCompensationValue = -12;
-    camera_status_t exposureCompensationStatus = ACaptureRequest_setEntry_i32(previewRequest, ACAMERA_CONTROL_AE_EXPOSURE_COMPENSATION, 1, &exposureCompensationValue);
-    Camera(exposureCompensationStatus)
+    Camera(ACaptureRequest_setEntry_i32(previewRequest, ACAMERA_CONTROL_AE_EXPOSURE_COMPENSATION, 1, &exposureCompensationValue))
 
     int32_t orientation = 90;
-    camera_status_t jpegOrientationStatus = ACaptureRequest_setEntry_i32(previewRequest,
-                                                                         ACAMERA_JPEG_ORIENTATION,
-                                                                         1,
-                                                                         &orientation);
-    Camera(jpegOrientationStatus)
+    Camera(ACaptureRequest_setEntry_i32(previewRequest, ACAMERA_JPEG_ORIENTATION, 1, &orientation))
 
     const int32_t sensor = 800;
-    camera_status_t sensorStatus = ACaptureRequest_setEntry_i32(previewRequest,
-                                                                ACAMERA_SENSOR_SENSITIVITY, 1,
-                                                                &sensor);
-    Camera(sensorStatus)
+    Camera(ACaptureRequest_setEntry_i32(previewRequest, ACAMERA_SENSOR_SENSITIVITY, 1, &sensor))
 
     int64_t sensorExposureTime = 30000000;
-    camera_status_t expTimeStatus = ACaptureRequest_setEntry_i64(previewRequest,
-                                                                 ACAMERA_SENSOR_EXPOSURE_TIME, 1,
-                                                                 &sensorExposureTime);
-    Camera(expTimeStatus)
+    Camera(ACaptureRequest_setEntry_i64(previewRequest, ACAMERA_SENSOR_EXPOSURE_TIME, 1, &sensorExposureTime))
 
 //    const int64_t frameDuration = 3000000;
-//    camera_status_t sensorFrameDurationStatus = ACaptureRequest_setEntry_i64(previewRequest,
-//                                                                             ACAMERA_SENSOR_FRAME_DURATION,
-//                                                                             1,
-//                                                                             &frameDuration);
-//    Camera(sensorFrameDurationStatus)
+//    camera_status_t sensorFrameDurationStatus = ACaptureRequest_setEntry_i64(previewRequest,ACAMERA_SENSOR_FRAME_DURATION,1,&frameDuration);
 
     float lensAperture = 1.5;
-    camera_status_t lensApertureStatus = ACaptureRequest_setEntry_float(previewRequest,
-                                                                        ACAMERA_LENS_APERTURE, 1,
-                                                                        &lensAperture);
-    Camera(lensApertureStatus)
+    Camera(ACaptureRequest_setEntry_float(previewRequest, ACAMERA_LENS_APERTURE, 1, &lensAperture))
 
     const uint8_t noiseMode = ACAMERA_NOISE_REDUCTION_MODE_MINIMAL;
-    camera_status_t noiseReductionStatus = ACaptureRequest_setEntry_u8(previewRequest,
-                                                                       ACAMERA_NOISE_REDUCTION_MODE,
-                                                                       1, &noiseMode);
-    Camera(noiseReductionStatus)
+    Camera(ACaptureRequest_setEntry_u8(previewRequest, ACAMERA_NOISE_REDUCTION_MODE, 1, &noiseMode))
 
     // set repeating request
-    ACameraCaptureSession_setRepeatingRequest(session, nullptr, 1, &previewRequest, nullptr);
+    Camera(ACameraCaptureSession_setRepeatingRequest(session, nullptr, 1, &previewRequest, nullptr))
 }
 
 void startCamera(JNIEnv *env, jobject object) {
-    // Create capture request
-    camera_status_t captureRequestStatus = ACameraDevice_createCaptureRequest(cameraDevice,
-                                                                              TEMPLATE_PREVIEW,
-                                                                              &previewRequest);
-    Camera(captureRequestStatus)
+    // create container
+    Camera(ACaptureSessionOutputContainer_create(&previewSessionOutputContainer))
 
-    ACameraDevice_createCaptureRequest(cameraDevice, TEMPLATE_STILL_CAPTURE, &captureRequest);
+    // Create ImageReader
+    createJpegReader();
+    createSurface();
+
+    // Create preview capture request
+    Camera(ACameraDevice_createCaptureRequest(cameraDevice, TEMPLATE_PREVIEW, &previewRequest))
+
+    // Create capture request
+//    Camera(ACameraDevice_createCaptureRequest(cameraDevice, TEMPLATE_STILL_CAPTURE, &captureRequest))
 
     // Prepare outputs for session
-    camera_status_t captureSessionOutputStatus = ACaptureSessionOutput_create(window,
-                                                                              &captureSessionOutput);
-    Camera(captureSessionOutputStatus)
-    camera_status_t captureSessionOutputContainerStatus = ACaptureSessionOutputContainer_create(
-            &captureSessionOutputContainer);
-    Camera(captureSessionOutputContainerStatus)
-    camera_status_t captureSessionOutputContainerAddStatus = ACaptureSessionOutputContainer_add(
-            captureSessionOutputContainer, captureSessionOutput);
-    Camera(captureSessionOutputContainerAddStatus)
+    Camera(ACaptureSessionOutput_create(previewWindow, &previewSessionOutput))
+    Camera(ACaptureSessionOutputContainer_add(previewSessionOutputContainer, previewSessionOutput))
+    Camera(ACameraOutputTarget_create(previewWindow, &previewOutputTarget))
+    Camera(ACaptureRequest_addTarget(previewRequest, previewOutputTarget))
 
-    camera_status_t outputTargetStatus = ACameraOutputTarget_create(window, &outputTarget);
-    Camera(outputTargetStatus)
-    camera_status_t addTargetStatus = ACaptureRequest_addTarget(previewRequest, outputTarget);
-    Camera(addTargetStatus)
-
-    // Image reader
-    imageReader = createJpegReader();
-    imageWindow = createSurface(imageReader);
-    ACameraOutputTarget_create(imageWindow, &imageTarget);
-
-    camera_status_t addCaptureTargetStatus = ACaptureRequest_addTarget(captureRequest, imageTarget);
-    Camera(addCaptureTargetStatus)
-
-    ACaptureSessionOutput_create(imageWindow, &imageOutput);
-    ACaptureSessionOutputContainer_add(captureSessionOutputContainer, imageOutput);
+    // Image reader session output
+    Camera(ACaptureSessionOutput_create(imageWindow, &captureSessionOutput))
+    Camera(ACaptureSessionOutputContainer_add(previewSessionOutputContainer, captureSessionOutput))
+    Camera(ACameraOutputTarget_create(imageWindow, &captureOutputTarget))
+    Camera(ACaptureRequest_addTarget(previewRequest, captureOutputTarget))
 
     // Create capture session
-    ACameraDevice_createCaptureSession(cameraDevice, captureSessionOutputContainer, &sessionCallbacks, &session);
+    Camera(ACameraDevice_createCaptureSession(cameraDevice, previewSessionOutputContainer, &sessionCallbacks, &session))
 
     detectionMode();
 }
 
 void destroy() {
-    ANativeWindow_release(window);
+    ANativeWindow_release(previewWindow);
     ANativeWindow_release(imageWindow);
     ACameraMetadata_free(cameraMetadata);
     ACaptureRequest_free(previewRequest);
 //    ACameraDevice_close(cameraDevice);
     ACaptureRequest_free(captureRequest);
     ACameraCaptureSession_close(session);
-    ACaptureSessionOutputContainer_remove(captureSessionOutputContainer, imageOutput);
-    ACaptureSessionOutputContainer_remove(captureSessionOutputContainer, captureSessionOutput);
+    ACaptureSessionOutputContainer_remove(previewSessionOutputContainer, captureSessionOutput);
+    ACaptureSessionOutputContainer_remove(previewSessionOutputContainer, previewSessionOutput);
+    ACaptureSessionOutputContainer_free(previewSessionOutputContainer);
     ACaptureSessionOutputContainer_free(captureSessionOutputContainer);
-    ACaptureSessionOutputContainer_free(captureImageSessionOutputContainer);
-    ACameraOutputTarget_free(imageTarget);
-    ACameraOutputTarget_free(outputTarget);
+    ACameraOutputTarget_free(captureOutputTarget);
+    ACameraOutputTarget_free(previewOutputTarget);
     AImageReader_delete(imageReader);
     ACameraManager_delete(cameraManager);
 }
@@ -654,8 +590,8 @@ void Java_com_demo_opengl_provider_CameraInterface_onSurfaceCreated(JNIEnv *jni,
     cameraWidth = width;
     cameraHeight = height;
 
-    // Create window with surface
-    window = ANativeWindow_fromSurface(jni, surface);
+    // Create previewWindow with surface
+    previewWindow = ANativeWindow_fromSurface(jni, surface);
 //    createEglContext(jni, surface);
 
     float vertices[] = {
@@ -885,8 +821,8 @@ void Java_com_demo_opengl_provider_CameraInterface_onSurfaceChanged(JNIEnv *jni,
                                                                     jint height) {
     windowWidth = width;
     windowHeight = height;
-    ANativeWindow_acquire(window);
-    ANativeWindow_setBuffersGeometry(window, windowWidth, windowHeight, WINDOW_FORMAT_RGBA_8888);
+    ANativeWindow_acquire(previewWindow);
+    ANativeWindow_setBuffersGeometry(previewWindow, windowWidth, windowHeight, WINDOW_FORMAT_RGBA_8888);
 
 }
 void

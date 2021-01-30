@@ -2,6 +2,7 @@ package com.demo.opengl.ui
 
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import android.view.View
 import android.view.WindowManager
 import android.widget.SeekBar
@@ -16,6 +17,10 @@ import com.demo.opengl.provider.ProviderConst
 import com.demo.opengl.utils.Constants
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.snackbar.Snackbar
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.face.FaceDetection
+import com.google.mlkit.vision.face.FaceDetector
+import com.google.mlkit.vision.face.FaceDetectorOptions
 import kotlinx.android.synthetic.main.activity_camera.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -23,6 +28,10 @@ import kotlinx.coroutines.launch
 import java.io.File
 
 class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener, View.OnClickListener, CaptureListener {
+
+    companion object {
+        private const val TAG = "CameraActivity"
+    }
 
     init {
         System.loadLibrary("cameraCpp")
@@ -32,11 +41,22 @@ class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener, Vie
 
     private val cameraModeImpl: CameraModeImpl by lazy { CameraModeImpl() }
 
+    private val mLock = Object()
+
+    private val detector: FaceDetector by lazy {
+        val options = FaceDetectorOptions.Builder()
+            .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
+            .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_ALL)
+            .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_ALL)
+            .build()
+        FaceDetection.getClient(options)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_camera)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-//        window.setFlags(WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS, WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS)
+//        previewWindow.setFlags(WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS, WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS)
 
         initView()
     }
@@ -63,7 +83,7 @@ class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener, Vie
 
         CameraInterface.openCamera()
         // Set camera mode to detection mode initially
-        changeMode(ProviderConst.DETECTION_MODE)
+//        changeMode(ProviderConst.DETECTION_MODE)
     }
 
     override fun onPause() {
@@ -77,6 +97,18 @@ class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener, Vie
         surface.getRenderer().setCaptureListener(null)
         CameraInterface.destroy()
         sheet.removeBottomSheetCallback(bottomSheetCallback)
+    }
+
+    fun runDetection(byteArray: ByteArray) {
+        synchronized(mLock) {
+            val image = InputImage.fromByteArray(byteArray, 640, 480, 90, InputImage.IMAGE_FORMAT_YUV_420_888)
+            detector.process(image).addOnSuccessListener {
+                Log.d(TAG, "runDetection() ${it.size}")
+
+            }.addOnFailureListener {
+                Log.e(TAG, "runDetection() $it")
+            }
+        }
     }
 
     /**

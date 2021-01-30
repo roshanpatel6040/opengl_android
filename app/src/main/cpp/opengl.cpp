@@ -148,7 +148,7 @@ void drawSquare() {
     glm::mat4 perspective = glm::perspective(glm::radians(
             90.0f), // The vertical Field of View, in radians: the amount of "zoom". Think "camera lens". Usually between 90° (extra wide) and 30° (quite zoomed in)
                                              (float) windowWidth /
-                                             (float) windowHeight,       // Aspect Ratio. Depends on the size of your window. Notice that 4/3 == 800/600 == 1280/960, sounds familiar ?
+                                             (float) windowHeight,       // Aspect Ratio. Depends on the size of your previewWindow. Notice that 4/3 == 800/600 == 1280/960, sounds familiar ?
                                              0.1f,              // Near clipping plane. Keep as big as possible, or you'll get precision issues.
                                              100.0f             // Far clipping plane. Keep as little as possible.
     );
@@ -274,7 +274,7 @@ void drawPyramid() {
     glm::mat4 perspective = glm::perspective(glm::radians(
             100.0f), // The vertical Field of View, in radians: the amount of "zoom". Think "camera lens". Usually between 90° (extra wide) and 30° (quite zoomed in)
                                              (float) windowWidth /
-                                             (float) windowHeight,       // Aspect Ratio. Depends on the size of your window. Notice that 4/3 == 800/600 == 1280/960, sounds familiar ?
+                                             (float) windowHeight,       // Aspect Ratio. Depends on the size of your previewWindow. Notice that 4/3 == 800/600 == 1280/960, sounds familiar ?
                                              0.1f,              // Near clipping plane. Keep as big as possible, or you'll get precision issues.
                                              50.1f             // Far clipping plane. Keep as little as possible.
     );
@@ -474,7 +474,7 @@ Java_com_demo_opengl_Render_onSurfaceChanged(JNIEnv *env, jobject object, jint w
     glViewport(0, 0, width, height);
     windowWidth = width;
     windowHeight = height;
-    __android_log_print(ANDROID_LOG_DEBUG, "onSurfaceChanged", "window:%i height:%i", windowWidth,
+    __android_log_print(ANDROID_LOG_DEBUG, "onSurfaceChanged", "previewWindow:%i height:%i", windowWidth,
                         windowHeight);
 }
 
