@@ -99,7 +99,6 @@ class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener, Vie
     }
 
     fun runDetection(byteArray: ByteArray) {
-        Log.d(TAG, "runDetection() ${byteArray.size}")
         synchronized(mLock) {
             if (isImageProcessing) {
                 return
@@ -107,11 +106,12 @@ class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener, Vie
             isImageProcessing = true
             CoroutineScope(Dispatchers.Default).launch {
                 try {
-                    val image = InputImage.fromByteArray(byteArray, 640, 480, 90, InputImage.IMAGE_FORMAT_YUV_420_888)
+                    val image = InputImage.fromByteArray(byteArray, 640, 480, 270, InputImage.IMAGE_FORMAT_NV21)
                     detector.process(image).addOnSuccessListener {
-                        Log.d(TAG, "runDetection() ${it.size}")
+                        it.forEach { face ->
+                            CameraInterface.boundingBox(face.boundingBox)
+                        }
                         isImageProcessing = false
-
                     }.addOnFailureListener {
                         Log.e(TAG, "runDetection() $it")
                         isImageProcessing = false

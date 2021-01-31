@@ -59,6 +59,9 @@ int windowHeight = 480;
 int cameraWidth = 0;
 int cameraHeight = 0;
 
+int detectionWidth = 640;
+int detectionHeight = 480;
+
 int textureID;
 GLuint program;
 GLuint triangleProgram;
@@ -77,6 +80,11 @@ GLuint awbLocation;
 GLuint textureLutReferenceID;
 GLuint lutTextureLocation;
 float applyAwb = 0;
+
+GLuint faceFilterProgram;
+GLuint filterBuffer[2];
+GLuint faceFilterPositionLocation;
+GLuint faceFilterMvpLocation;
 
 ACameraManager *cameraManager;
 ACameraDevice *cameraDevice;
@@ -98,6 +106,160 @@ ACameraMetadata_const_entry entry = {0};
 JavaVM *javaVM = nullptr;
 jclass activityClass;
 jobject activityObj;
+
+float detectionVertices[12];
+
+const string faceFilterVertexCode = "#version 320 es\n"
+                                    "in vec3 position;\n"
+                                    "uniform mat4 u_MVP;\n"
+                                    "void main()\n"
+                                    "{\n"
+                                    "gl_Position = u_MVP * vec4(position,1.0);\n"
+                                    "}";
+const string faceFilterFragmentCode = "#version 320 es\n"
+                                      "precision highp float;\n"
+                                      "out vec4 fragColor;\n"
+                                      "void main()\n"
+                                      "{\n"
+                                      "fragColor = vec4(0.0,0.2,0.1,0.5);\n"
+                                      "}";
+
+const string vertexShaderCode = "#version 320 es\n"
+                                "in vec3 position;\n"
+                                "in vec2 texChords;\n"
+                                "uniform mat4 texMatrix;\n"
+                                "uniform mat4 u_MVP;\n"
+                                "out vec2 v_Chord;\n"
+                                "void main()\n"
+                                "{\n"
+                                "v_Chord = (texMatrix * vec4(texChords.x, texChords.y, 0.0, 1.0)).xy;\n"
+                                "gl_Position = u_MVP * vec4(position,1.0);\n"
+                                "}";
+const string fragmentShaderCode = "#version 320 es\n"
+                                  "#extension GL_OES_EGL_image_external_essl3 : require\n"
+                                  "precision highp float;\n"
+                                  "uniform highp vec4 color;\n"
+                                  "in lowp vec2 v_Chord;\n"
+                                  "uniform samplerExternalOES tex;\n"
+                                  "uniform highp sampler2D textureLut;\n"
+                                  "uniform float u_saturation;\n"
+                                  "uniform float u_contrast;\n"
+                                  "uniform float u_brightness;\n"
+                                  "uniform float u_highlight;\n"
+                                  "uniform float u_shadow;\n"
+                                  "uniform float u_awb; // awb 0 off and 1 on\n"
+                                  "const float Epsilon = 1e-10;\n"
+                                  "const float cellsPerRow = 8.0;\n"
+                                  "const float cellSize = 0.125;\n"
+                                  "const float halfTexelSize = 0.0009765625;\n"
+                                  "const float cellSizeFixed = 0.123046875;\n"
+                                  "out vec4 fragColor;\n"
+                                  "\n"
+                                  "// ***** Rgb to hsv ***** \n"
+                                  "vec3 RGBtoHSV(in vec3 RGB)\n"
+                                  " {\n"
+                                  "        vec4  P   = (RGB.g < RGB.b) ? vec4(RGB.bg, -1.0, 2.0/3.0) : vec4(RGB.gb, 0.0, -1.0/3.0);\n"
+                                  "        vec4  Q   = (RGB.r < P.x) ? vec4(P.xyw, RGB.r) : vec4(RGB.r, P.yzx);\n"
+                                  "        float C   = Q.x - min(Q.w, Q.y);\n"
+                                  "        float H   = abs((Q.w - Q.y) / (6.0 * C + Epsilon) + Q.z);\n"
+                                  "        vec3  HCV = vec3(H, C, Q.x);\n"
+                                  "        float S   = HCV.y / (HCV.z + Epsilon);\n"
+                                  "        return vec3(HCV.x, S, HCV.z);\n"
+                                  " }\n"
+                                  "// ***** Hsv to rgb ***** \n"
+                                  "\n"
+                                  " vec3 HSVtoRGB(in vec3 HSV)\n"
+                                  " {\n"
+                                  "        float H   = HSV.x;\n"
+                                  "        float R   = abs(H * 6.0 - 3.0) - 1.0;\n"
+                                  "        float G   = 2.0 - abs(H * 6.0 - 2.0);\n"
+                                  "        float B   = 2.0 - abs(H * 6.0 - 4.0);\n"
+                                  "        vec3  RGB = clamp( vec3(R,G,B), 0.0, 1.0 );\n"
+                                  "        return ((RGB - 1.0) * HSV.y + 1.0) * HSV.z;\n"
+                                  "}\n"
+                                  "\n"
+                                  "// ***** Brightness ***** \n"
+                                  "vec4 brightness(vec4 color,float brightness)\n"
+                                  "{\n"
+                                  "        vec4 transformedColor = vec4(color.rgb + brightness,1.0);\n"
+                                  "        return clamp(transformedColor,0.0,1.0);\n"
+                                  "}\n"
+                                  "// ***** Contrast ***** \n"
+                                  "vec4 contrast(vec4 color,float contrast)\n"
+                                  "{\n"
+                                  "        vec4 contrastColor = vec4(((color.rgb-vec3(0.5))*contrast)+vec3(0.5), 1.0);\n"
+                                  "        return clamp(contrastColor,0.0,1.0);\n"
+                                  "}\n"
+                                  "\n"
+                                  "// ***** Lut Filter ***** \n"
+                                  "vec4 lut(vec4 color)\n"
+                                  "{\n"
+                                  "float alpha = color.a;\n"
+                                  "vec4 pmc = vec4(color.rgb/alpha,alpha);\n"
+                                  "vec4 lookup = texture(textureLut,pmc.xy);\n"
+                                  "lookup.a = 1.0;\n"
+                                  "return lookup;\n"
+                                  "}\n"
+                                  "vec4 lutFilter(vec4 color)\n"
+                                  "{\n"
+                                  "float b = color.b * (cellsPerRow * cellsPerRow - 1.0);\n"
+                                  "vec2 lc,ls,uc,us;\n"
+                                  "lc.y = floor(b / cellsPerRow);\n"
+                                  "lc.x = floor(b) - lc.y * cellsPerRow;\n"
+                                  "ls.x = lc.x * cellSize + halfTexelSize + cellSizeFixed * color.r;\n"
+                                  "ls.y = lc.y * cellSize + halfTexelSize + cellSizeFixed * color.g;\n"
+                                  "uc.y = floor(ceil(b) / cellsPerRow);\n"
+                                  "uc.x = ceil(b) - uc.y * cellsPerRow;\n"
+                                  "us.x = uc.x * cellSize + halfTexelSize + cellSizeFixed * color.r;\n"
+                                  "us.y = uc.y * cellSize + halfTexelSize + cellSizeFixed * color.g;\n"
+                                  "vec3 outColor = mix(texture(textureLut,ls).rgb,texture(textureLut,us).rgb, fract(b));\n"
+                                  "outColor = mix(color.rgb, outColor,0.15555);\n" // last parameter ranges 0.0 to 1.0 -> 1.0 show lut color
+                                  "return vec4(outColor,color.x);\n"
+                                  "}\n"
+                                  "vec4 whiteBalance(vec4 source,float temp,float tint)\n"
+                                  "{\n"
+                                  "lowp vec3 warmFilter = vec3(0.93, 0.54, 0.0);\n"
+                                  "mediump mat3 RGBtoYIQ = mat3(0.299, 0.587, 0.114, 0.596, -0.274, -0.322, 0.212, -0.523, 0.311);\n"
+                                  "mediump mat3 YIQtoRGB = mat3(1.0, 0.956, 0.621, 1.0, -0.272, -0.647, 1.0, -1.105, 1.702);\n"
+                                  "mediump vec3 yiq = RGBtoYIQ * source.rgb;\n"
+                                  "yiq.b = clamp(yiq.b + tint*0.5226*0.1, -0.5226, 0.5226);\n"
+                                  "lowp vec3 rgb = YIQtoRGB * yiq;\n"
+                                  "lowp vec3 processed = vec3(\n"
+                                  "		(rgb.r < 0.5 ? (2.0 * rgb.r * warmFilter.r) : (1.0 - 2.0 * (1.0 - rgb.r) * (1.0 - warmFilter.r))),//adjusting temperature\n"
+                                  "		(rgb.g < 0.5 ? (2.0 * rgb.g * warmFilter.g) : (1.0 - 2.0 * (1.0 - rgb.g) * (1.0 - warmFilter.g))),\n"
+                                  "		(rgb.b < 0.5 ? (2.0 * rgb.b * warmFilter.b) : (1.0 - 2.0 * (1.0 - rgb.b) * (1.0 - warmFilter.b))));\n"
+                                  "return vec4(mix(rgb,processed,temp),source.a);\n"
+                                  "}\n"
+                                  "vec4 gamma(vec4 awb)\n"
+                                  "{\n"
+                                  "float gamma = 2.2;\n"
+                                  "return vec4(pow(awb.rgb, vec3(1.0/gamma)),awb.a);\n"
+                                  "}\n"
+                                  "void main()\n"
+                                  "{\n"
+                                  "vec4 frag = texture(tex,v_Chord);\n"
+                                  "vec3 color = frag.xyz;\n"
+                                  "vec3 col_hsv = RGBtoHSV(color.rgb);\n"
+                                  "col_hsv.y *= (u_saturation * 2.0); \n"
+                                  "vec3 col_rgb = HSVtoRGB(col_hsv.rgb);\n"
+                                  "vec4 final = vec4(col_rgb.rgb,1.0);\n"
+                                  "vec4 contrast = contrast(final,u_contrast);\n"
+                                  "vec4 brightness = brightness(contrast,u_brightness);\n"
+                                  "float luminance = dot(brightness.rgb,vec3(0.3,0.3,0.3));\n"
+                                  "float shadow = clamp((pow(luminance, 1.0/(u_shadow + 1.0)) + (-0.76)*pow(luminance, 2.0/(u_shadow + 1.0))) - luminance, 0.0, 1.0);\n"
+                                  "float highlight = clamp((1.0 - (pow(1.0-luminance, 1.0/(2.0-u_highlight)) + (-0.8)*pow(1.0-luminance, 2.0/(2.0-u_highlight)))) - luminance, -1.0, 0.0);\n"
+                                  "vec3 result = (luminance + shadow + highlight) * brightness.rgb / luminance;\n"
+                                  "if(u_awb == 0.0)\n"
+                                  "{\n"
+                                  "vec4 awb = vec4(result.rgb,brightness.a);\n"
+                                  "fragColor = awb;\n"
+                                  "}\n"
+                                  "else\n"
+                                  "{\n"
+                                  "vec4 awb = whiteBalance(vec4(result.rgb,brightness.a),0.00006 * (10000.0 - 5000.0),0.0);\n"
+                                  "fragColor = awb;\n"
+                                  "}\n"
+                                  "}";
 
 #define Camera(x) \
     if(x != ACAMERA_OK){ \
@@ -194,11 +356,9 @@ static void imageCallback(void *context, AImageReader *reader) {
         AImage_getPlaneData(image, 0, &y, &yl);
         AImage_getPlaneData(image, 1, &u, &ul);
         AImage_getPlaneData(image, 2, &v, &vl);
-        __android_log_print(ANDROID_LOG_DEBUG, "Camera", "%d %d %d %d", planes, yl, ul, vl);
-
         AImage_delete(image);
 
-        uint8_t *yuvData = (uint8_t *) calloc((yl + ul + vl),sizeof(uint8_t));
+        uint8_t *yuvData = (uint8_t *) calloc((yl + ul + vl), sizeof(uint8_t));
         memcpy(yuvData, y, yl);
         memcpy(yuvData, u, ul);
         memcpy(yuvData, v, vl);
@@ -236,7 +396,7 @@ static void imageCallback(void *context, AImageReader *reader) {
 }
 
 void createJpegReader() {
-    media_status_t status = AImageReader_new(640, 480, AIMAGE_FORMAT_YUV_420_888, 2, &imageReader);
+    media_status_t status = AImageReader_new(detectionWidth, detectionHeight, AIMAGE_FORMAT_YUV_420_888, 2, &imageReader);
     if (status != AMEDIA_OK) {
         __android_log_print(ANDROID_LOG_ERROR, "Camera Reader", "%d", status);
     }
@@ -650,142 +810,6 @@ void Java_com_demo_opengl_provider_CameraInterface_onSurfaceCreated(JNIEnv *jni,
             2, 1, 0, 0, 3, 2
     };
 
-    std::string vertexShaderCode = "#version 320 es\n"
-                                   "in vec3 position;\n"
-                                   "in vec2 texChords;\n"
-                                   "uniform mat4 texMatrix;\n"
-                                   "uniform mat4 u_MVP;\n"
-                                   "out vec2 v_Chord;\n"
-                                   "void main()\n"
-                                   "{\n"
-                                   "v_Chord = (texMatrix * vec4(texChords.x, texChords.y, 0.0, 1.0)).xy;\n"
-                                   "gl_Position = u_MVP * vec4(position,1.0);\n"
-                                   "}";
-    std::string fragmentShaderCode = "#version 320 es\n"
-                                     "#extension GL_OES_EGL_image_external_essl3 : require\n"
-                                     "precision highp float;\n"
-                                     "uniform highp vec4 color;\n"
-                                     "in lowp vec2 v_Chord;\n"
-                                     "uniform samplerExternalOES tex;\n"
-                                     "uniform highp sampler2D textureLut;\n"
-                                     "uniform float u_saturation;\n"
-                                     "uniform float u_contrast;\n"
-                                     "uniform float u_brightness;\n"
-                                     "uniform float u_highlight;\n"
-                                     "uniform float u_shadow;\n"
-                                     "uniform float u_awb; // awb 0 off and 1 on\n"
-                                     "const float Epsilon = 1e-10;\n"
-                                     "const float cellsPerRow = 8.0;\n"
-                                     "const float cellSize = 0.125;\n"
-                                     "const float halfTexelSize = 0.0009765625;\n"
-                                     "const float cellSizeFixed = 0.123046875;\n"
-                                     "out vec4 fragColor;\n"
-                                     "\n"
-                                     "// ***** Rgb to hsv ***** \n"
-                                     "vec3 RGBtoHSV(in vec3 RGB)\n"
-                                     " {\n"
-                                     "        vec4  P   = (RGB.g < RGB.b) ? vec4(RGB.bg, -1.0, 2.0/3.0) : vec4(RGB.gb, 0.0, -1.0/3.0);\n"
-                                     "        vec4  Q   = (RGB.r < P.x) ? vec4(P.xyw, RGB.r) : vec4(RGB.r, P.yzx);\n"
-                                     "        float C   = Q.x - min(Q.w, Q.y);\n"
-                                     "        float H   = abs((Q.w - Q.y) / (6.0 * C + Epsilon) + Q.z);\n"
-                                     "        vec3  HCV = vec3(H, C, Q.x);\n"
-                                     "        float S   = HCV.y / (HCV.z + Epsilon);\n"
-                                     "        return vec3(HCV.x, S, HCV.z);\n"
-                                     " }\n"
-                                     "// ***** Hsv to rgb ***** \n"
-                                     "\n"
-                                     " vec3 HSVtoRGB(in vec3 HSV)\n"
-                                     " {\n"
-                                     "        float H   = HSV.x;\n"
-                                     "        float R   = abs(H * 6.0 - 3.0) - 1.0;\n"
-                                     "        float G   = 2.0 - abs(H * 6.0 - 2.0);\n"
-                                     "        float B   = 2.0 - abs(H * 6.0 - 4.0);\n"
-                                     "        vec3  RGB = clamp( vec3(R,G,B), 0.0, 1.0 );\n"
-                                     "        return ((RGB - 1.0) * HSV.y + 1.0) * HSV.z;\n"
-                                     "}\n"
-                                     "\n"
-                                     "// ***** Brightness ***** \n"
-                                     "vec4 brightness(vec4 color,float brightness)\n"
-                                     "{\n"
-                                     "        vec4 transformedColor = vec4(color.rgb + brightness,1.0);\n"
-                                     "        return clamp(transformedColor,0.0,1.0);\n"
-                                     "}\n"
-                                     "// ***** Contrast ***** \n"
-                                     "vec4 contrast(vec4 color,float contrast)\n"
-                                     "{\n"
-                                     "        vec4 contrastColor = vec4(((color.rgb-vec3(0.5))*contrast)+vec3(0.5), 1.0);\n"
-                                     "        return clamp(contrastColor,0.0,1.0);\n"
-                                     "}\n"
-                                     "\n"
-                                     "// ***** Lut Filter ***** \n"
-                                     "vec4 lut(vec4 color)\n"
-                                     "{\n"
-                                     "float alpha = color.a;\n"
-                                     "vec4 pmc = vec4(color.rgb/alpha,alpha);\n"
-                                     "vec4 lookup = texture(textureLut,pmc.xy);\n"
-                                     "lookup.a = 1.0;\n"
-                                     "return lookup;\n"
-                                     "}\n"
-                                     "vec4 lutFilter(vec4 color)\n"
-                                     "{\n"
-                                     "float b = color.b * (cellsPerRow * cellsPerRow - 1.0);\n"
-                                     "vec2 lc,ls,uc,us;\n"
-                                     "lc.y = floor(b / cellsPerRow);\n"
-                                     "lc.x = floor(b) - lc.y * cellsPerRow;\n"
-                                     "ls.x = lc.x * cellSize + halfTexelSize + cellSizeFixed * color.r;\n"
-                                     "ls.y = lc.y * cellSize + halfTexelSize + cellSizeFixed * color.g;\n"
-                                     "uc.y = floor(ceil(b) / cellsPerRow);\n"
-                                     "uc.x = ceil(b) - uc.y * cellsPerRow;\n"
-                                     "us.x = uc.x * cellSize + halfTexelSize + cellSizeFixed * color.r;\n"
-                                     "us.y = uc.y * cellSize + halfTexelSize + cellSizeFixed * color.g;\n"
-                                     "vec3 outColor = mix(texture(textureLut,ls).rgb,texture(textureLut,us).rgb, fract(b));\n"
-                                     "outColor = mix(color.rgb, outColor,0.15555);\n" // last parameter ranges 0.0 to 1.0 -> 1.0 show lut color
-                                     "return vec4(outColor,color.x);\n"
-                                     "}\n"
-                                     "vec4 whiteBalance(vec4 source,float temp,float tint)\n"
-                                     "{\n"
-                                     "lowp vec3 warmFilter = vec3(0.93, 0.54, 0.0);\n"
-                                     "mediump mat3 RGBtoYIQ = mat3(0.299, 0.587, 0.114, 0.596, -0.274, -0.322, 0.212, -0.523, 0.311);\n"
-                                     "mediump mat3 YIQtoRGB = mat3(1.0, 0.956, 0.621, 1.0, -0.272, -0.647, 1.0, -1.105, 1.702);\n"
-                                     "mediump vec3 yiq = RGBtoYIQ * source.rgb;\n"
-                                     "yiq.b = clamp(yiq.b + tint*0.5226*0.1, -0.5226, 0.5226);\n"
-                                     "lowp vec3 rgb = YIQtoRGB * yiq;\n"
-                                     "lowp vec3 processed = vec3(\n"
-                                     "		(rgb.r < 0.5 ? (2.0 * rgb.r * warmFilter.r) : (1.0 - 2.0 * (1.0 - rgb.r) * (1.0 - warmFilter.r))),//adjusting temperature\n"
-                                     "		(rgb.g < 0.5 ? (2.0 * rgb.g * warmFilter.g) : (1.0 - 2.0 * (1.0 - rgb.g) * (1.0 - warmFilter.g))),\n"
-                                     "		(rgb.b < 0.5 ? (2.0 * rgb.b * warmFilter.b) : (1.0 - 2.0 * (1.0 - rgb.b) * (1.0 - warmFilter.b))));\n"
-                                     "return vec4(mix(rgb,processed,temp),source.a);\n"
-                                     "}\n"
-                                     "vec4 gamma(vec4 awb)\n"
-                                     "{\n"
-                                     "float gamma = 2.2;\n"
-                                     "return vec4(pow(awb.rgb, vec3(1.0/gamma)),awb.a);\n"
-                                     "}\n"
-                                     "void main()\n"
-                                     "{\n"
-                                     "vec4 frag = texture(tex,v_Chord);\n"
-                                     "vec3 color = frag.xyz;\n"
-                                     "vec3 col_hsv = RGBtoHSV(color.rgb);\n"
-                                     "col_hsv.y *= (u_saturation * 2.0); \n"
-                                     "vec3 col_rgb = HSVtoRGB(col_hsv.rgb);\n"
-                                     "vec4 final = vec4(col_rgb.rgb,1.0);\n"
-                                     "vec4 contrast = contrast(final,u_contrast);\n"
-                                     "vec4 brightness = brightness(contrast,u_brightness);\n"
-                                     "float luminance = dot(brightness.rgb,vec3(0.3,0.3,0.3));\n"
-                                     "float shadow = clamp((pow(luminance, 1.0/(u_shadow + 1.0)) + (-0.76)*pow(luminance, 2.0/(u_shadow + 1.0))) - luminance, 0.0, 1.0);\n"
-                                     "float highlight = clamp((1.0 - (pow(1.0-luminance, 1.0/(2.0-u_highlight)) + (-0.8)*pow(1.0-luminance, 2.0/(2.0-u_highlight)))) - luminance, -1.0, 0.0);\n"
-                                     "vec3 result = (luminance + shadow + highlight) * brightness.rgb / luminance;\n"
-                                     "if(u_awb == 0.0)\n"
-                                     "{\n"
-                                     "vec4 awb = vec4(result.rgb,brightness.a);\n"
-                                     "fragColor = awb;\n"
-                                     "}\n"
-                                     "else\n"
-                                     "{\n"
-                                     "vec4 awb = whiteBalance(vec4(result.rgb,brightness.a),0.00006 * (10000.0 - 5000.0),0.0);\n"
-                                     "fragColor = awb;\n"
-                                     "}\n"
-                                     "}";
     __android_log_print(ANDROID_LOG_ERROR, "OpenGL version", "%s", glGetString(GL_VERSION));
     __android_log_print(ANDROID_LOG_ERROR, "OpenGL shader version", "%s",
                         glGetString(GL_SHADING_LANGUAGE_VERSION));
@@ -856,6 +880,22 @@ void Java_com_demo_opengl_provider_CameraInterface_onSurfaceCreated(JNIEnv *jni,
     GLCall(shadowLocation = glGetUniformLocation(program, "u_shadow"))
     GLCall(awbLocation = glGetUniformLocation(program, "u_awb"))
     GLCall(lutTextureLocation = glGetUniformLocation(program, "textureLut"))
+
+    // Create face filter program
+    GLCall(faceFilterProgram = glCreateProgram())
+    GLCall(Shader faceFilterShader = Shader(faceFilterProgram, faceFilterVertexCode, faceFilterFragmentCode))
+    GLCall(glLinkProgram(faceFilterProgram))
+
+    GLCall(glGenBuffers(2, filterBuffer))
+    GLCall(glBindBuffer(GL_ARRAY_BUFFER, filterBuffer[0]))
+    GLCall(glBufferData(GL_ARRAY_BUFFER, sizeof(detectionVertices), nullptr, GL_DYNAMIC_DRAW))
+
+    unsigned int filterOrder[] = {2, 1, 0, 0, 3, 2};
+    GLCall(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, filterBuffer[1]))
+    GLCall(glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(filterOrder), filterOrder, GL_STATIC_DRAW))
+
+    GLCall(faceFilterPositionLocation = glGetAttribLocation(faceFilterProgram, "position"))
+    GLCall(faceFilterMvpLocation = glGetAttribLocation(faceFilterProgram, "u_MVP"))
 
     startCamera(jni, object);
 }
@@ -933,11 +973,9 @@ Java_com_demo_opengl_provider_CameraInterface_onDrawFrame(JNIEnv *jni, jobject o
     GLCall(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, arrayBuffer[1]))
 
     GLCall(glEnableVertexAttribArray(positionHandle))
-    GLCall(glVertexAttribPointer(positionHandle, 3, GL_FLOAT, false, 5 * sizeof(float),
-                                 (GLvoid *) nullptr))
+    GLCall(glVertexAttribPointer(positionHandle, 3, GL_FLOAT, false, 5 * sizeof(float), (GLvoid *) nullptr))
     GLCall(glEnableVertexAttribArray(chordsHandle))
-    GLCall(glVertexAttribPointer(chordsHandle, 2, GL_FLOAT, false, 5 * sizeof(float),
-                                 (GLvoid *) (3 * sizeof(float))))
+    GLCall(glVertexAttribPointer(chordsHandle, 2, GL_FLOAT, false, 5 * sizeof(float), (GLvoid *) (3 * sizeof(float))))
 
     GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE))
     GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE))
@@ -946,6 +984,17 @@ Java_com_demo_opengl_provider_CameraInterface_onDrawFrame(JNIEnv *jni, jobject o
 
     GLCall(glDisableVertexAttribArray(positionHandle))
     GLCall(glDisableVertexAttribArray(chordsHandle))
+
+    glm::mat4 faceFilterMvp = glm::ortho(0.0f, 1.0f, 1.0f, 0.0f, -0.1f, 100.0f);
+    GLCall(glUseProgram(faceFilterProgram))
+    GLCall(glUniformMatrix4fv(faceFilterMvpLocation, 1, false, glm::value_ptr(faceFilterMvp)))
+    GLCall(glBindBuffer(GL_ARRAY_BUFFER, filterBuffer[0]))
+    GLCall(glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(detectionVertices), detectionVertices))
+    GLCall(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, filterBuffer[1]))
+    GLCall(glEnableVertexAttribArray(faceFilterPositionLocation))
+    GLCall(glVertexAttribPointer(faceFilterPositionLocation, 3, GL_FLOAT, false, 3 * sizeof(float), (GLvoid *) nullptr))
+    GLCall(glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr))
+    GLCall(glDisableVertexAttribArray(faceFilterPositionLocation))
 }
 
 void Java_com_demo_opengl_provider_CameraInterface_changeMode(JNIEnv *jni, jobject object, jint mode) {
@@ -956,5 +1005,77 @@ void Java_com_demo_opengl_provider_CameraInterface_changeMode(JNIEnv *jni, jobje
         detectionMode();
         applyAwb = 1;
     }
+}
+
+void Java_com_demo_opengl_provider_CameraInterface_boundingBox(JNIEnv *jni, jobject object, jobject rect) {
+    jclass jclassRect = (*jni).FindClass("android/graphics/Rect");
+    int left = (*jni).GetIntField(rect, (*jni).GetFieldID(jclassRect, "left", "I"));
+    int top = (*jni).GetIntField(rect, (*jni).GetFieldID(jclassRect, "top", "I"));
+    int right = (*jni).GetIntField(rect, (*jni).GetFieldID(jclassRect, "right", "I"));
+    int bottom = (*jni).GetIntField(rect, (*jni).GetFieldID(jclassRect, "bottom", "I"));
+
+    int wLeft, wTop, wRight, wBottom;
+    wLeft = (windowWidth * left) / detectionWidth;
+    wTop = (windowHeight * top) / detectionHeight;
+    wRight = (windowWidth * right) / detectionWidth;
+    wBottom = (windowHeight * bottom) / detectionHeight;
+
+    memset(detectionVertices, 0, sizeof(detectionVertices));
+
+//    detectionVertices[0] = (float) wLeft;
+//    detectionVertices[1] = (float) wTop;
+//    detectionVertices[2] = 1.0;
+//    detectionVertices[3] = (float) wLeft;
+//    detectionVertices[4] = (float) wBottom;
+//    detectionVertices[5] = 1.0;
+//    detectionVertices[6] = (float) wRight;
+//    detectionVertices[7] = (float) wBottom;
+//    detectionVertices[8] = 1.0;
+//    detectionVertices[9] = (float) wRight;
+//    detectionVertices[10] = (float) wTop;
+//    detectionVertices[11] = 1.0;
+
+    detectionVertices[0] = 0.0;
+    detectionVertices[1] = 1.0;
+    detectionVertices[2] = 1.0;
+    detectionVertices[3] = 1.0;
+    detectionVertices[4] = 1.0;
+    detectionVertices[5] = 1.0;
+    detectionVertices[6] = 1.0;
+    detectionVertices[7] = 0.0;
+    detectionVertices[8] = 1.0;
+    detectionVertices[9] = 0.0;
+    detectionVertices[10] = 0.0;
+    detectionVertices[11] = 1.0;
+
+//    detectionVertices[0] = 0.0f;
+//    detectionVertices[1] = (float) windowHeight;
+//    detectionVertices[2] = 1.0f;
+//    detectionVertices[3] = 0.0f;
+//    detectionVertices[4] = 0.0f;
+//    detectionVertices[5] = 1.0f;
+//    detectionVertices[6] = (float) windowWidth;
+//    detectionVertices[7] = 0.0f;
+//    detectionVertices[8] = 1.0f;
+//    detectionVertices[9] = (float) windowWidth;
+//    detectionVertices[10] = (float) windowHeight;
+//    detectionVertices[11] = 1.0f;
+
+//    detectionVertices[0] = 0.0f;
+//    detectionVertices[1] = (float) windowHeight;
+//    detectionVertices[2] = 1.0f;
+//    detectionVertices[3] = (float) windowWidth;
+//    detectionVertices[4] = (float) windowHeight;
+//    detectionVertices[5] = 1.0f;
+//    detectionVertices[6] = (float) windowWidth;
+//    detectionVertices[7] = 0.0f;
+//    detectionVertices[8] = 1.0f;
+//    detectionVertices[9] = 0.0f;
+//    detectionVertices[10] = 0.0f;
+//    detectionVertices[11] = 1.0f;
+
+//    for (int i = 0; i < sizeof(detectionVertices) / sizeof(float); i++) {
+//        __android_log_print(ANDROID_LOG_ERROR, "Bounding box", "position: %d, x,y:%f", i, detectionVertices[i]);
+//    }
 }
 }
