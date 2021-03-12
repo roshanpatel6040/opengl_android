@@ -18,6 +18,8 @@ private:
 //    std::map <std::string, GLint> mOrderedMapUniformLocation;
 
 public:
+    Shader();
+
     Shader(int program, std::string vertexShaderSource, std::string fragmentShaderSource);
 
     GLint getAttributeLocation(const char *name);

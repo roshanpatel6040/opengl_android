@@ -14,6 +14,8 @@ private:
     unsigned int mCount;
 
 public:
+    IndexBuffer();
+
     IndexBuffer(unsigned int *data, unsigned int count);
 
     ~IndexBuffer();

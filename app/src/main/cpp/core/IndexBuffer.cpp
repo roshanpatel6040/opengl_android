@@ -8,6 +8,10 @@
 #include "GLES2/gl2.h"
 #include "GLES2/gl2platform.h"
 
+IndexBuffer::IndexBuffer() {
+
+}
+
 IndexBuffer::IndexBuffer(unsigned int *data, unsigned int count) : mCount(count) {
     // Size must be same
     ASSERT(sizeof(unsigned int) == sizeof(GLuint))

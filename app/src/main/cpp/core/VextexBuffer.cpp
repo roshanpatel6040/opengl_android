@@ -8,6 +8,10 @@
 #include "GLES2/gl2.h"
 #include "GLES2/gl2platform.h"
 
+VertexBuffer::VertexBuffer() {
+
+}
+
 VertexBuffer::VertexBuffer(const void *data, unsigned int size) {
     glGenBuffers(1, &mReferenceID);
     glBindBuffer(GL_ARRAY_BUFFER, mReferenceID);

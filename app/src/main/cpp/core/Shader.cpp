@@ -10,6 +10,9 @@
 #include "Renderer.h"
 #include "android/log.h"
 
+Shader::Shader(){
+}
+
 Shader::Shader(int program, std::string vertexShaderSource, std::string fragmentShaderSource)
         : mProgramReferenceID(program) {
     mVertexShaderReferenceID = loadShader(GL_VERTEX_SHADER, vertexShaderSource);

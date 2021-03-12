@@ -28,6 +28,10 @@ add_library(texture
         STATIC
         src/main/cpp/core/Texture.cpp)
 
+add_library(cameraView
+        STATIC
+        src/main/cpp/core/CameraView.cpp)
+
 
 include_directories(src/main/cpp/stb_image)
 include_directories(src/main/cpp/glm)
@@ -45,6 +49,7 @@ target_link_libraries( # Specifies the target library.
         shader
         texture
         android
+        cameraView
         ${log-lib}
         ${camera-lib}
         ${media-lib}
@@ -60,6 +65,7 @@ target_link_libraries( # Specifies the target library.
         indexBuffer
         shader
         texture
+        cameraView
         android
         ${log-lib}
         EGL

@@ -3,6 +3,10 @@ package com.demo.opengl.provider
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.SurfaceTexture
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import android.opengl.GLES11Ext
 import android.opengl.GLES20
 import android.opengl.GLSurfaceView
@@ -24,6 +28,37 @@ class CameraRenderer(var context: Context) : GLSurfaceView.Renderer {
 
     companion object {
         private const val TAG = "CameraRenderer"
+    }
+
+    private val rotationMatrix = FloatArray(16)
+    private val remappedRotationMatrix = FloatArray(16)
+    private val orientations = FloatArray(3)
+
+    init {
+        val sensorManager: SensorManager = context.applicationContext.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+        val sensor = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
+        sensorManager.registerListener(object : SensorEventListener {
+            override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
+            }
+
+            override fun onSensorChanged(event: SensorEvent) {
+                SensorManager.getRotationMatrixFromVector(rotationMatrix, event.values)
+                SensorManager.remapCoordinateSystem(
+                    rotationMatrix, SensorManager.AXIS_X, SensorManager.AXIS_Z,
+                    remappedRotationMatrix
+                )
+                SensorManager.getOrientation(remappedRotationMatrix, orientations)
+
+                Log.d(TAG, "Yaw: " + orientations[0] + " " +  Math.toDegrees(orientations[0].toDouble())) // Yaw
+                Log.d(TAG, "Pitch: " + orientations[1] + " " +  Math.toDegrees(orientations[1].toDouble())) // Pitch
+                Log.d(TAG, "Roll: " + orientations[2] + " " +  Math.toDegrees(orientations[2].toDouble())) // Roll
+
+//                for (i in 0..2) {
+//                    orientations[i] = Math.toDegrees(orientations[i].toDouble()).toFloat()
+//                    Log.e(TAG,"$i == ${orientations[i]}")
+//                }
+            }
+        }, sensor, 1)
     }
 
     private var captureListener: CaptureListener? = null
@@ -121,7 +156,7 @@ class CameraRenderer(var context: Context) : GLSurfaceView.Renderer {
             }
         }
 
-        CameraInterface.onDrawFrame(texMatrix, saturation, contrast, brightness, highlight, shadow)
+        CameraInterface.onDrawFrame(texMatrix, saturation, contrast, brightness, highlight, shadow,orientations)
 
         if (capture) {
             captureImage(false)

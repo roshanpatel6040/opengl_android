@@ -31,6 +31,8 @@
 #include "stb_image/stb_image.cpp"
 #include <android/asset_manager_jni.h>
 #include <android/asset_manager.h>
+#include <CameraView.h>
+#include <gtx/quaternion.hpp>
 #include "core/headers/Renderer.h"
 #include "core/headers/Shader.h"
 #include "core/headers/Texture.h"
@@ -51,6 +53,8 @@
 #include "media/NdkMediaFormat.h"
 #include "thread"
 
+#include "android/sensor.h"
+
 using namespace std;
 
 int windowWidth = 640;
@@ -62,10 +66,17 @@ int cameraHeight = 0;
 int detectionWidth = 640;
 int detectionHeight = 480;
 
+Shader shader;
+VertexBuffer vb;
+IndexBuffer ib;
+CameraView camera;
+GLint trianglePositionHandle;
+GLuint triangleProgram;
+GLint triangleColorPositionHandle;
+
 int textureID;
 GLuint program;
-GLuint triangleProgram;
-GLuint arrayBuffer[2];
+GLuint arrayBuffer[4];
 GLuint positionHandle;
 GLuint mvpLocation;
 GLuint matrixLocation;
@@ -82,7 +93,6 @@ GLuint lutTextureLocation;
 float applyAwb = 0;
 
 GLuint faceFilterProgram;
-GLuint filterBuffer[2];
 GLuint faceFilterPositionLocation;
 GLuint faceFilterMvpLocation;
 
@@ -102,6 +112,10 @@ ACameraOutputTarget *previewOutputTarget;
 ACameraOutputTarget *captureOutputTarget;
 ACameraMetadata *cameraMetadata;
 ACameraMetadata_const_entry entry = {0};
+
+ASensorManager *sensorManager;
+
+bool isTriangleDrawn = false;
 
 JavaVM *javaVM = nullptr;
 jclass activityClass;
@@ -415,21 +429,28 @@ void drawTriangle() {
     int CHORDS_COLOR_PER_VERTEX = 4;
     int BYTES_PER_FLOAT = 4;
     float vertices[] = {
-            //    X    Y     Z     R     G      B    A
-            0.0f, 0.5f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f,
-            -0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f,
-            0.5f, -0.5f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f};
+            0.0f, 1.0f, 40.0f, 1.0f, 0.5f, 1.0f, 1.0f,
+            -1.0f, 0.0f, 60.0f, 0.3f, 1.0f, 1.0f, 1.0f,
+            1.0f, 0.0f, 60.0f, 0.0f, 1.0f, 0.0f, 1.0f,
+            1.0f, -1.0f, 20.0f, 1.0f, 1.0f, 1.0f, 1.0f,
+            -1.0f, -1.0f, 20.0f, 0.7f, 0.3f, 0.5f, 1.0f};
+
+    unsigned int indices[] = {0, 1, 2, 0, 2, 3, 0, 3, 4, 0, 4, 1};
 
     float color[] = {1.0f, 0.5f, 0.0f, 1.0f};
 
     // varying field uses to transfer data between vertex and fragment shader
     std::string vertexShaderCode = "attribute vec4 position;\n"
                                    "attribute vec4 v_color;\n"
+                                   "uniform mat4 mvp;\n"
+                                   "uniform mat4 model;\n"
+                                   "uniform mat4 projection;\n"
+                                   "uniform mat4 camera;\n"
                                    "varying vec4 f_color;\n" // Passes to fragment shader
                                    "void main()\n"
                                    "{\n"
                                    " f_color = v_color;\n"
-                                   " gl_Position = position;\n"
+                                   " gl_Position = projection * camera * model * position;\n"
                                    "}";
     std::string fragmentShaderCode = "uniform vec4 color;\n" // Get using uniform location
                                      "varying vec4 f_color;\n" // Get from vertex shader
@@ -439,32 +460,37 @@ void drawTriangle() {
                                      //                                " gl_FragColor = color;\n"
                                      "}";
 
+    glEnable(GL_DEPTH);
     GLCall(triangleProgram = glCreateProgram())
-    GLCall(Shader shader(triangleProgram, vertexShaderCode, fragmentShaderCode))
+    GLCall(shader = Shader(triangleProgram, vertexShaderCode, fragmentShaderCode))
+
+    GLCall(vb = VertexBuffer(vertices, sizeof(vertices)))
+    GLCall(ib = IndexBuffer(indices, sizeof(indices)))
+    GLCall(vb.bind())
+    GLCall(ib.bind())
+
     GLCall(glLinkProgram(triangleProgram))
     GLCall(glUseProgram(triangleProgram))
 
-    GLCall(VertexBuffer vb(vertices, sizeof(vertices)))
-
-    GLCall(GLint positionHandle = shader.getAttributeLocation("position"))
-    GLCall(shader.vertexAttribPointer(positionHandle, GL_FLOAT, 3, 7 * sizeof(float),
+    GLCall(trianglePositionHandle = shader.getAttributeLocation("position"))
+    GLCall(shader.vertexAttribPointer(trianglePositionHandle, GL_FLOAT, 3, 7 * sizeof(float),
                                       (GLvoid *) nullptr))
-    GLCall(shader.enableVertexAttribArray(positionHandle))
+    GLCall(shader.enableVertexAttribArray(trianglePositionHandle))
 
-    GLCall(GLuint colorPositionHandle = shader.getAttributeLocation("v_color"))
-    GLCall(shader.vertexAttribPointer(colorPositionHandle, GL_FLOAT, 4, 7 * sizeof(float),
+    GLCall(triangleColorPositionHandle = shader.getAttributeLocation("v_color"))
+    GLCall(shader.vertexAttribPointer(triangleColorPositionHandle, GL_FLOAT, 4, 7 * sizeof(float),
                                       (GLvoid *) (3 * sizeof(float))))
-    GLCall(shader.enableVertexAttribArray(colorPositionHandle))
+    GLCall(shader.enableVertexAttribArray(triangleColorPositionHandle))
 
     GLCall(int colorHandle = shader.getUniformLocation("color"))
     GLCall(shader.setUniform4fv(colorHandle,
                                 sizeof(color) / CHORDS_COLOR_PER_VERTEX / BYTES_PER_FLOAT, color))
 
-    GLCall(glDrawArrays(GL_TRIANGLES, 0, 3))
-    GLCall(shader.disableVertexAttribPointer(positionHandle))
-    GLCall(shader.disableVertexAttribPointer(colorPositionHandle))
-    GLCall(shader.unBind())
-    GLCall(vb.unBind())
+    camera = CameraView();
+    camera.setLocation(triangleProgram, "camera");
+
+
+    isTriangleDrawn = true;
 }
 
 string getCameraId() {
@@ -480,7 +506,7 @@ string getCameraId() {
         ACameraMetadata_getConstEntry(metaData, ACAMERA_LENS_FACING, &lensInfo);
 
         auto facing = static_cast<acamera_metadata_enum_android_lens_facing_t>(lensInfo.data.u8[0]);
-        if (facing == ACAMERA_LENS_FACING_FRONT) {
+        if (facing == ACAMERA_LENS_FACING_BACK) {
             backFacingId = id;
             break;
         }
@@ -711,7 +737,7 @@ void startCamera(JNIEnv *env, jobject object) {
     Camera(ACameraOutputTarget_create(imageWindow, &captureOutputTarget))
     // Image reader output is set to preview request because we need ImageReader with preview surface
     // To Setup image reader with the capture request create a capture request and add target to capture request instead of Preview request
-    Camera(ACaptureRequest_addTarget(previewRequest, captureOutputTarget))
+//    Camera(ACaptureRequest_addTarget(previewRequest, captureOutputTarget))
 
     // Create capture session
     Camera(ACameraDevice_createCaptureSession(cameraDevice, previewSessionOutputContainer, &sessionCallbacks, &session))
@@ -742,6 +768,9 @@ void closeCamera() {
     ACameraDevice_close(cameraDevice);
 }
 
+static ALooper_callbackFunc looperCallback = {
+};
+
 extern "C" {
 
 void Java_com_demo_opengl_ui_CameraActivity_setup(JNIEnv *jni, jobject object) {
@@ -753,6 +782,9 @@ void Java_com_demo_opengl_ui_CameraActivity_setup(JNIEnv *jni, jobject object) {
 
 void Java_com_demo_opengl_provider_CameraInterface_initialize(JNIEnv *jni, jobject object) {
     cameraManager = ACameraManager_create();
+//    sensorManager = ASensorManager_getInstance();
+//    const ASensor *accelerometerSensor = ASensorManager_getDefaultSensor(sensorManager, ASENSOR_TYPE_ACCELEROMETER);
+//    const ASensorEventQueue *eventQueue = ASensorManager_createEventQueue(sensorManager, ALooper_forThread(), 0, looperCallback, nullptr);
     openCamera(jni, object);
 }
 
@@ -860,7 +892,7 @@ void Java_com_demo_opengl_provider_CameraInterface_onSurfaceCreated(JNIEnv *jni,
         __android_log_print(ANDROID_LOG_ERROR, "Lut texture", "%s", "Failed");
     }
 
-    GLCall(glGenBuffers(2, arrayBuffer))
+    GLCall(glGenBuffers(4, arrayBuffer))
     GLCall(glBindBuffer(GL_ARRAY_BUFFER, arrayBuffer[0]))
     GLCall(glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_DYNAMIC_DRAW))
 
@@ -886,18 +918,19 @@ void Java_com_demo_opengl_provider_CameraInterface_onSurfaceCreated(JNIEnv *jni,
     GLCall(Shader faceFilterShader = Shader(faceFilterProgram, faceFilterVertexCode, faceFilterFragmentCode))
     GLCall(glLinkProgram(faceFilterProgram))
 
-    GLCall(glGenBuffers(2, filterBuffer))
-    GLCall(glBindBuffer(GL_ARRAY_BUFFER, filterBuffer[0]))
+    GLCall(glBindBuffer(GL_ARRAY_BUFFER, arrayBuffer[2]))
     GLCall(glBufferData(GL_ARRAY_BUFFER, sizeof(detectionVertices), nullptr, GL_DYNAMIC_DRAW))
 
     unsigned int filterOrder[] = {2, 1, 0, 0, 3, 2};
-    GLCall(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, filterBuffer[1]))
+    GLCall(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, arrayBuffer[3]))
     GLCall(glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(filterOrder), filterOrder, GL_STATIC_DRAW))
 
     GLCall(faceFilterPositionLocation = glGetAttribLocation(faceFilterProgram, "position"))
     GLCall(faceFilterMvpLocation = glGetAttribLocation(faceFilterProgram, "u_MVP"))
 
     startCamera(jni, object);
+
+    drawTriangle();
 }
 
 void Java_com_demo_opengl_provider_CameraInterface_onSurfaceChanged(JNIEnv *jni,
@@ -917,7 +950,7 @@ Java_com_demo_opengl_provider_CameraInterface_onDrawFrame(JNIEnv *jni, jobject o
                                                           jfloat contrast,
                                                           jfloat brightness,
                                                           jfloat highlight,
-                                                          jfloat shadow) {
+                                                          jfloat shadow, jfloatArray orientation) {
     GLCall(glViewport(0, 0, windowWidth, windowHeight))
     GLCall(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT))
     GLCall(glClearColor(0, 0, 0, 1))
@@ -985,16 +1018,58 @@ Java_com_demo_opengl_provider_CameraInterface_onDrawFrame(JNIEnv *jni, jobject o
     GLCall(glDisableVertexAttribArray(positionHandle))
     GLCall(glDisableVertexAttribArray(chordsHandle))
 
-    glm::mat4 faceFilterMvp = glm::ortho(0.0f, 1.0f, 1.0f, 0.0f, -0.1f, 100.0f);
-    GLCall(glUseProgram(faceFilterProgram))
-    GLCall(glUniformMatrix4fv(faceFilterMvpLocation, 1, false, glm::value_ptr(faceFilterMvp)))
-    GLCall(glBindBuffer(GL_ARRAY_BUFFER, filterBuffer[0]))
-    GLCall(glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(detectionVertices), detectionVertices))
-    GLCall(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, filterBuffer[1]))
-    GLCall(glEnableVertexAttribArray(faceFilterPositionLocation))
-    GLCall(glVertexAttribPointer(faceFilterPositionLocation, 3, GL_FLOAT, false, 3 * sizeof(float), (GLvoid *) nullptr))
-    GLCall(glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr))
-    GLCall(glDisableVertexAttribArray(faceFilterPositionLocation))
+    float m[] = {
+            1.0f, 0.0f, 0.0f, 0.0f,
+            0.0f, 1.0f, 0.0f, 0.0f,
+            0.0f, 0.0f, 1.0f, 0.0f,
+            0.0f, 0.0f, 0.0f, 1.0f,
+    };
+
+//    ortho(m, 0.0f, 1.0f, 1.0f, 0.0f, 0.0f, 0.0f);
+
+//    GLCall(glUseProgram(faceFilterProgram))
+//    GLCall(glBindBuffer(GL_ARRAY_BUFFER, arrayBuffer[2]))
+//    GLCall(glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(detectionVertices), detectionVertices))
+//    GLCall(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, arrayBuffer[3]))
+//    GLCall(glEnableVertexAttribArray(faceFilterPositionLocation))
+//    GLCall(glVertexAttribPointer(faceFilterPositionLocation, 3, GL_FLOAT, false, 3 * sizeof(float), (GLvoid *) nullptr))
+//    GLCall(glUniformMatrix4fv(faceFilterMvpLocation, 1, false, m))
+//    GLCall(glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr))
+//    GLCall(glDisableVertexAttribArray(faceFilterPositionLocation))
+
+    GLCall(glUseProgram(triangleProgram))
+    // Pass SurfaceTexture transformations to shader
+    float *ot = jni->GetFloatArrayElements(orientation, nullptr);
+//    vb.bind();
+//    ib.bind();
+    GLCall(shader.enableVertexAttribArray(trianglePositionHandle))
+
+    GLCall(shader.vertexAttribPointer(trianglePositionHandle, GL_FLOAT, 3, 7 * sizeof(float),
+                                      (GLvoid *) nullptr))
+    GLCall(shader.enableVertexAttribArray(triangleColorPositionHandle))
+    GLCall(shader.vertexAttribPointer(triangleColorPositionHandle, GL_FLOAT, 4, 7 * sizeof(float),
+                                      (GLvoid *) (3 * sizeof(float))))
+
+    glm::mat4 prespective = glm::perspective(glm::radians(45.0f), (float) windowWidth / (float) windowHeight, 0.1f, 100.0f);
+    glm::mat4 translate = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, 0.0f));
+    glm::quat newRotation = glm::quat(glm::vec3(ot[0], ot[1], ot[2]));
+    glm::mat4 nR = glm::toMat4(newRotation);
+    jni->ReleaseFloatArrayElements(orientation, ot, 0);
+    translate = glm::rotate(translate, 0.0f, glm::vec3(1.0f, 1.0f, 1.0f)) * nR;
+
+    GLCall(GLuint projectionLocation = shader.getUniformLocation("projection"))
+    GLCall(shader.setUniformMatrix4fv(projectionLocation, 1, glm::value_ptr(prespective)))
+
+    GLCall(GLuint modelLocation = shader.getUniformLocation("model"))
+    GLCall(shader.setUniformMatrix4fv(modelLocation, 1, glm::value_ptr(translate)))
+    GLCall(camera.useCamera())
+
+    GLCall(glDrawArrays(GL_TRIANGLES, 0, ib.getCount()))
+    GLCall(shader.disableVertexAttribPointer(trianglePositionHandle))
+    GLCall(shader.disableVertexAttribPointer(triangleColorPositionHandle))
+//    GLCall(ib.unBind())
+//    GLCall(vb.unBind())
+
 }
 
 void Java_com_demo_opengl_provider_CameraInterface_changeMode(JNIEnv *jni, jobject object, jint mode) {
@@ -1035,30 +1110,31 @@ void Java_com_demo_opengl_provider_CameraInterface_boundingBox(JNIEnv *jni, jobj
 //    detectionVertices[10] = (float) wTop;
 //    detectionVertices[11] = 1.0;
 
-    detectionVertices[0] = 0.0;
-    detectionVertices[1] = 1.0;
-    detectionVertices[2] = 1.0;
-    detectionVertices[3] = 1.0;
-    detectionVertices[4] = 1.0;
-    detectionVertices[5] = 1.0;
-    detectionVertices[6] = 1.0;
-    detectionVertices[7] = 0.0;
-    detectionVertices[8] = 1.0;
-    detectionVertices[9] = 0.0;
-    detectionVertices[10] = 0.0;
-    detectionVertices[11] = 1.0;
 
-//    detectionVertices[0] = 0.0f;
-//    detectionVertices[1] = (float) windowHeight;
+    detectionVertices[0] = 0.0f;
+    detectionVertices[1] = 0.0f;
+    detectionVertices[2] = 0.0f;
+    detectionVertices[3] = 0.0f;
+    detectionVertices[4] = 1.0f;
+    detectionVertices[5] = 0.0f;
+    detectionVertices[6] = 1.0f;
+    detectionVertices[7] = 1.0f;
+    detectionVertices[8] = 0.0f;
+    detectionVertices[9] = 1.0f;
+    detectionVertices[10] = 0.0f;
+    detectionVertices[11] = 0.0f;
+
+//    detectionVertices[0] = 500.0f;
+//    detectionVertices[1] = 500.0f;
 //    detectionVertices[2] = 1.0f;
-//    detectionVertices[3] = 0.0f;
-//    detectionVertices[4] = 0.0f;
+//    detectionVertices[3] = 700.0f;
+//    detectionVertices[4] = 500.0f;
 //    detectionVertices[5] = 1.0f;
-//    detectionVertices[6] = (float) windowWidth;
-//    detectionVertices[7] = 0.0f;
+//    detectionVertices[6] = 700.0f;
+//    detectionVertices[7] = 700.0f;
 //    detectionVertices[8] = 1.0f;
-//    detectionVertices[9] = (float) windowWidth;
-//    detectionVertices[10] = (float) windowHeight;
+//    detectionVertices[9] = 500.0f;
+//    detectionVertices[10] = 700.0f;
 //    detectionVertices[11] = 1.0f;
 
 //    detectionVertices[0] = 0.0f;
