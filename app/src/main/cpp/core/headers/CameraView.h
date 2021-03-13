@@ -20,7 +20,7 @@ public:
 
     void setLocation(GLuint program, const char *name);
 
-    void changeCamera();
+    void changeCamera(float* orientations);
 
     void useCamera();
 
@@ -31,6 +31,9 @@ public:
 private:
     GLuint mCameraLocation{};
     glm::mat4 camera{};
+    glm::vec3 cameraPos;
+    glm::vec3 cameraFront;
+    glm::vec3 cameraUp;
 };
 
 #endif //OPENGL_CAMERAVIEW_H

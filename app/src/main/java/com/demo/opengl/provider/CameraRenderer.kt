@@ -34,14 +34,12 @@ class CameraRenderer(var context: Context) : GLSurfaceView.Renderer {
     private val remappedRotationMatrix = FloatArray(16)
     private val orientations = FloatArray(3)
 
-    init {
-        val sensorManager: SensorManager = context.applicationContext.getSystemService(Context.SENSOR_SERVICE) as SensorManager
-        val sensor = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
-        sensorManager.registerListener(object : SensorEventListener {
-            override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
-            }
+    private var listener = object : SensorEventListener {
+        override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
+        }
 
-            override fun onSensorChanged(event: SensorEvent) {
+        override fun onSensorChanged(event: SensorEvent) {
+            if (event.sensor.type == Sensor.TYPE_ROTATION_VECTOR) {
                 SensorManager.getRotationMatrixFromVector(rotationMatrix, event.values)
                 SensorManager.remapCoordinateSystem(
                     rotationMatrix, SensorManager.AXIS_X, SensorManager.AXIS_Z,
@@ -49,16 +47,29 @@ class CameraRenderer(var context: Context) : GLSurfaceView.Renderer {
                 )
                 SensorManager.getOrientation(remappedRotationMatrix, orientations)
 
-                Log.d(TAG, "Yaw: " + orientations[0] + " " +  Math.toDegrees(orientations[0].toDouble())) // Yaw
-                Log.d(TAG, "Pitch: " + orientations[1] + " " +  Math.toDegrees(orientations[1].toDouble())) // Pitch
-                Log.d(TAG, "Roll: " + orientations[2] + " " +  Math.toDegrees(orientations[2].toDouble())) // Roll
+//            Log.d(TAG, "Yaw: " + orientations[0] + " " + Math.toDegrees(orientations[0].toDouble())) // Yaw
+//            Log.d(TAG, "Pitch: " + orientations[1] + " " + Math.toDegrees(orientations[1].toDouble())) // Pitch
+//            Log.d(TAG, "Roll: " + orientations[2] + " " + Math.toDegrees(orientations[2].toDouble())) // Roll
 
 //                for (i in 0..2) {
 //                    orientations[i] = Math.toDegrees(orientations[i].toDouble()).toFloat()
 //                    Log.e(TAG,"$i == ${orientations[i]}")
 //                }
             }
-        }, sensor, 1)
+
+            if (event.sensor.type == Sensor.TYPE_LINEAR_ACCELERATION) {
+                Log.d(TAG, "x: " + event.values[0])
+                Log.d(TAG, "y: " + event.values[1])
+                Log.d(TAG, "z: " + event.values[2])
+            }
+        }
+    }
+
+    init {
+        val sensorManager: SensorManager = context.applicationContext.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+        val sensor = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
+        sensorManager.registerListener(listener, sensor, 1)
+        sensorManager.registerListener(listener, sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION), 1)
     }
 
     private var captureListener: CaptureListener? = null
@@ -156,7 +167,7 @@ class CameraRenderer(var context: Context) : GLSurfaceView.Renderer {
             }
         }
 
-        CameraInterface.onDrawFrame(texMatrix, saturation, contrast, brightness, highlight, shadow,orientations)
+        CameraInterface.onDrawFrame(texMatrix, saturation, contrast, brightness, highlight, shadow, orientations)
 
         if (capture) {
             captureImage(false)
