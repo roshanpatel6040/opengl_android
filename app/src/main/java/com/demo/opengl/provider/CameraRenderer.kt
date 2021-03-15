@@ -24,15 +24,30 @@ import java.nio.ByteOrder
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
 
+
 class CameraRenderer(var context: Context) : GLSurfaceView.Renderer {
 
     companion object {
         private const val TAG = "CameraRenderer"
+
+        private const val ALPHA = 1.0F // if alpha is 1 and 0 then no filter applies
     }
 
     private val rotationMatrix = FloatArray(16)
     private val remappedRotationMatrix = FloatArray(16)
     private val orientations = FloatArray(3)
+    private var rotationVectorValues = FloatArray(5)
+
+    fun lowPass(input: FloatArray, output: FloatArray): FloatArray {
+        if (output.isEmpty()) {
+            return input
+        }
+
+        for (i in input.indices) {
+            output[i] = output[i] + ALPHA * (input[i] - output[i])
+        }
+        return output
+    }
 
     private var listener = object : SensorEventListener {
         override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
@@ -40,7 +55,8 @@ class CameraRenderer(var context: Context) : GLSurfaceView.Renderer {
 
         override fun onSensorChanged(event: SensorEvent) {
             if (event.sensor.type == Sensor.TYPE_ROTATION_VECTOR) {
-                SensorManager.getRotationMatrixFromVector(rotationMatrix, event.values)
+                rotationVectorValues = lowPass(event.values.clone(), rotationVectorValues)
+                SensorManager.getRotationMatrixFromVector(rotationMatrix, rotationVectorValues)
                 SensorManager.remapCoordinateSystem(
                     rotationMatrix, SensorManager.AXIS_X, SensorManager.AXIS_Z,
                     remappedRotationMatrix

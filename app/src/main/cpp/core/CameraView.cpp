@@ -28,7 +28,7 @@ void CameraView::changeCamera(float *orientations) {
 
     glm::vec3 direction;
     direction.x = cos(yaw) * cos(pitch);
-    direction.y = sin(pitch);
+    direction.y = -sin(pitch);
     direction.z = sin(yaw) * cos(pitch);
     cameraFront = glm::normalize(direction);
 
