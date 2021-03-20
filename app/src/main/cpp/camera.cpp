@@ -429,11 +429,11 @@ void drawTriangle() {
     int CHORDS_COLOR_PER_VERTEX = 4;
     int BYTES_PER_FLOAT = 4;
     float vertices[] = {
-            -1.0f, -1.0f, -100.0f, 0.3f, 1.0f, 1.0f, 1.0f,
-            1.0f, -1.0f, -100.0f, 0.0f, 1.0f, 0.0f, 1.0f,
-            1.0f, -1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
-            -1.0f, -1.0f, 1.0f, 0.7f, 0.3f, 0.5f, 1.0f,
-            0.0f, 1.0f, 0.0f, 1.0f, 0.5f, 1.0f, 1.0f};
+            -1.0f, -1.0f, 50.0f, 1.0f, 0.0f, 0.0f, 1.0f,
+            1.0f, -1.0f, 50.0f, 0.0f, 0.0f, 1.0f, 1.0f,
+            1.0f, -1.0f, 10.0f, 0.0f, 1.0f, 0.0f, 1.0f,
+            -1.0f, -1.0f, 10.0f, 1.0f, 1.0f, 1.0f, 1.0f,
+            0.0f, 1.0f, 30.0f, 0.0f, 0.0f, 0.0f, 1.0f};
 
     unsigned int indices[] = {2, 4, 3,   // front face (CCW)
                               1, 4, 2,   // right face
@@ -463,10 +463,10 @@ void drawTriangle() {
                                      //                                " gl_FragColor = color;\n"
                                      "}";
 
-//    glEnable(GL_DEPTH);
-    glFrontFace(GL_CCW);
-//    glDisable(GL_CULL_FACE);
-//    glCullFace(GL_FRONT_FACE);
+//    glEnable(GL_DEPTH_TEST);
+//    glDepthFunc(GL_LEQUAL);
+    glEnable(GL_CULL_FACE);
+    glCullFace(GL_FRONT_FACE);
     GLCall(triangleProgram = glCreateProgram())
     GLCall(shader = Shader(triangleProgram, vertexShaderCode, fragmentShaderCode))
 
@@ -829,6 +829,9 @@ void Java_com_demo_opengl_provider_CameraInterface_onSurfaceCreated(JNIEnv *jni,
                                                                     jobject surface,
                                                                     jint width,
                                                                     jint height) {
+
+    GLCall(glClearColor(0, 0, 0, 1))
+
     textureID = textureId;
     cameraWidth = width;
     cameraHeight = height;
@@ -943,6 +946,8 @@ void Java_com_demo_opengl_provider_CameraInterface_onSurfaceChanged(JNIEnv *jni,
                                                                     jobject object,
                                                                     jint width,
                                                                     jint height) {
+    GLCall(glViewport(0, 0, width, height))
+
     windowWidth = width;
     windowHeight = height;
     ANativeWindow_acquire(previewWindow);
@@ -957,9 +962,9 @@ Java_com_demo_opengl_provider_CameraInterface_onDrawFrame(JNIEnv *jni, jobject o
                                                           jfloat brightness,
                                                           jfloat highlight,
                                                           jfloat shadow, jfloatArray orientation) {
-    GLCall(glViewport(0, 0, windowWidth, windowHeight))
+    glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+    glClearDepthf(1.0f);
     GLCall(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT))
-    GLCall(glClearColor(0, 0, 0, 1))
 
     GLCall(glUseProgram(program))
 
@@ -1049,20 +1054,20 @@ Java_com_demo_opengl_provider_CameraInterface_onDrawFrame(JNIEnv *jni, jobject o
 //    vb.bind();
 //    ib.bind();
     GLCall(shader.enableVertexAttribArray(trianglePositionHandle))
-
-    GLCall(shader.vertexAttribPointer(trianglePositionHandle, GL_FLOAT, 3, 7 * sizeof(float),
-                                      (GLvoid *) nullptr))
+//
+//    GLCall(shader.vertexAttribPointer(trianglePositionHandle, GL_FLOAT, 3, 7 * sizeof(float),
+//                                      (GLvoid *) nullptr))
     GLCall(shader.enableVertexAttribArray(triangleColorPositionHandle))
-    GLCall(shader.vertexAttribPointer(triangleColorPositionHandle, GL_FLOAT, 4, 7 * sizeof(float),
-                                      (GLvoid *) (3 * sizeof(float))))
+//    GLCall(shader.vertexAttribPointer(triangleColorPositionHandle, GL_FLOAT, 4, 7 * sizeof(float),
+//                                      (GLvoid *) (3 * sizeof(float))))
 
     camera.changeCamera(ot);
-    glm::mat4 prespective = glm::perspective(glm::radians(45.0f), float(windowWidth)/float(windowHeight), 0.1f, 100.0f);
+    glm::mat4 prespective = glm::perspective(glm::radians(45.0f), float(windowWidth) / float(windowHeight), 0.1f, 100.0f);
     glm::mat4 translate = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, 0.0f));
 //    glm::quat newRotation = glm::quat(glm::vec3(ot[0], ot[1], ot[2]));
 //    glm::mat4 nR = glm::toMat4(newRotation);
     jni->ReleaseFloatArrayElements(orientation, ot, 0);
-    translate = glm::rotate(translate, 90.0f, glm::vec3(1.0f, 1.0f, 1.0f));
+//    translate = glm::rotate(translate, 90.0f, glm::vec3(0.0f, 0.0f, 0.0f));
 
     GLCall(GLuint projectionLocation = shader.getUniformLocation("projection"))
     GLCall(shader.setUniformMatrix4fv(projectionLocation, 1, glm::value_ptr(prespective)))

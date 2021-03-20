@@ -5,7 +5,7 @@
 #include "headers/CameraView.h"
 
 CameraView::CameraView() {
-    cameraPos = glm::vec3(0.0f, 0.0f, 10.0f);
+    cameraPos = glm::vec3(0.0f, 0.0f, -3.0f);
     cameraFront = glm::vec3(0.0f, 0.0f, 0.0f);
     cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
     camera = glm::lookAt(cameraPos, cameraFront, cameraUp);

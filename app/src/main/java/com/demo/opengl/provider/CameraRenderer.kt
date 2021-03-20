@@ -30,7 +30,7 @@ class CameraRenderer(var context: Context) : GLSurfaceView.Renderer {
     companion object {
         private const val TAG = "CameraRenderer"
 
-        private const val ALPHA = 1.0F // if alpha is 1 and 0 then no filter applies
+        private const val ALPHA = 0.8F // if alpha is 1 and 0 then no filter applies
     }
 
     private val rotationMatrix = FloatArray(16)
@@ -38,13 +38,15 @@ class CameraRenderer(var context: Context) : GLSurfaceView.Renderer {
     private val orientations = FloatArray(3)
     private var rotationVectorValues = FloatArray(5)
 
+    private var lastTime: Long = 0
+
     fun lowPass(input: FloatArray, output: FloatArray): FloatArray {
         if (output.isEmpty()) {
             return input
         }
 
         for (i in input.indices) {
-            output[i] = output[i] + ALPHA * (input[i] - output[i])
+            output[i] = ALPHA * output[i] + (1 - ALPHA) * input[i]
         }
         return output
     }
@@ -54,38 +56,59 @@ class CameraRenderer(var context: Context) : GLSurfaceView.Renderer {
         }
 
         override fun onSensorChanged(event: SensorEvent) {
-            if (event.sensor.type == Sensor.TYPE_ROTATION_VECTOR) {
-                rotationVectorValues = lowPass(event.values.clone(), rotationVectorValues)
-                SensorManager.getRotationMatrixFromVector(rotationMatrix, rotationVectorValues)
-                SensorManager.remapCoordinateSystem(
-                    rotationMatrix, SensorManager.AXIS_X, SensorManager.AXIS_Z,
-                    remappedRotationMatrix
-                )
-                SensorManager.getOrientation(remappedRotationMatrix, orientations)
-
-//            Log.d(TAG, "Yaw: " + orientations[0] + " " + Math.toDegrees(orientations[0].toDouble())) // Yaw
-//            Log.d(TAG, "Pitch: " + orientations[1] + " " + Math.toDegrees(orientations[1].toDouble())) // Pitch
-//            Log.d(TAG, "Roll: " + orientations[2] + " " + Math.toDegrees(orientations[2].toDouble())) // Roll
-
-//                for (i in 0..2) {
-//                    orientations[i] = Math.toDegrees(orientations[i].toDouble()).toFloat()
-//                    Log.e(TAG,"$i == ${orientations[i]}")
-//                }
+            if (event.sensor.type == Sensor.TYPE_GAME_ROTATION_VECTOR) {
+                val currentTime = System.currentTimeMillis()
+                if ((currentTime - lastTime) > 0) {
+                    rotationVectorValues = lowPass(event.values.clone(), rotationVectorValues)
+                    SensorManager.getRotationMatrixFromVector(rotationMatrix, rotationVectorValues)
+                    SensorManager.remapCoordinateSystem(
+                        rotationMatrix, SensorManager.AXIS_X, SensorManager.AXIS_Z,
+                        remappedRotationMatrix
+                    )
+                    SensorManager.getOrientation(remappedRotationMatrix, orientations)
+                    lastTime = currentTime
+                }
             }
-
             if (event.sensor.type == Sensor.TYPE_LINEAR_ACCELERATION) {
-                Log.d(TAG, "x: " + event.values[0])
-                Log.d(TAG, "y: " + event.values[1])
-                Log.d(TAG, "z: " + event.values[2])
+                val x = event.values[0]
+                val y = event.values[1]
+                val z = event.values[2]
+            }
+            if (event.sensor.type == Sensor.TYPE_ACCELEROMETER) {
+                val x = event.values[0]
+                val y = event.values[1]
+                val z = event.values[2]
+            }
+            if (event.sensor.type == Sensor.TYPE_GYROSCOPE) {
+                val x = event.values[0]
+                val y = event.values[1]
+                val z = event.values[2]
+            }
+            if (event.sensor.type == Sensor.TYPE_MAGNETIC_FIELD) {
+                val x = event.values[0]
+                val y = event.values[1]
+                val z = event.values[2]
+
+//                Log.e("TAG","magnetic Field x: $x")
+//                Log.e("TAG","magnetic Field y: $y")
+//                Log.e("TAG","magnetic Field z: $z")
+            }
+            if (event.sensor.type == Sensor.TYPE_GRAVITY) {
+                val x = event.values[0]
+                val y = event.values[1]
+                val z = event.values[2]
             }
         }
     }
 
     init {
         val sensorManager: SensorManager = context.applicationContext.getSystemService(Context.SENSOR_SERVICE) as SensorManager
-        val sensor = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
-        sensorManager.registerListener(listener, sensor, 1)
+        sensorManager.registerListener(listener, sensorManager.getDefaultSensor(Sensor.TYPE_GAME_ROTATION_VECTOR), 1000)
         sensorManager.registerListener(listener, sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION), 1)
+        sensorManager.registerListener(listener, sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER), 1)
+        sensorManager.registerListener(listener, sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE), 1)
+        sensorManager.registerListener(listener, sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD), 1)
+        sensorManager.registerListener(listener, sensorManager.getDefaultSensor(Sensor.TYPE_GRAVITY), 1)
     }
 
     private var captureListener: CaptureListener? = null
