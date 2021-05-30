@@ -20,7 +20,7 @@ public:
 
     void setLocation(GLuint program, const char *name);
 
-    void changeCamera(float* orientations);
+    void changeCamera(float* orientations, float* distance);
 
     void useCamera();
 

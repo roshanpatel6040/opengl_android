@@ -10,9 +10,11 @@ import android.hardware.SensorManager
 import android.opengl.GLES11Ext
 import android.opengl.GLES20
 import android.opengl.GLSurfaceView
+import android.opengl.Matrix
 import android.os.Environment
 import android.util.Log
 import android.view.Surface
+import android.view.WindowManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -33,10 +35,18 @@ class CameraRenderer(var context: Context) : GLSurfaceView.Renderer {
         private const val ALPHA = 0.8F // if alpha is 1 and 0 then no filter applies
     }
 
+    private lateinit var windowManager: WindowManager
+
     private val rotationMatrix = FloatArray(16)
     private val remappedRotationMatrix = FloatArray(16)
     private val orientations = FloatArray(3)
     private var rotationVectorValues = FloatArray(5)
+
+    private var oldTime: Long = 0
+    private val acceleration = FloatArray(3)
+    private val velocity = FloatArray(3)
+    private val gravity = FloatArray(3)
+    private val distance = FloatArray(3)
 
     private var lastTime: Long = 0
 
@@ -56,18 +66,19 @@ class CameraRenderer(var context: Context) : GLSurfaceView.Renderer {
         }
 
         override fun onSensorChanged(event: SensorEvent) {
-            if (event.sensor.type == Sensor.TYPE_GAME_ROTATION_VECTOR) {
-                val currentTime = System.currentTimeMillis()
-                if ((currentTime - lastTime) > 0) {
-                    rotationVectorValues = lowPass(event.values.clone(), rotationVectorValues)
-                    SensorManager.getRotationMatrixFromVector(rotationMatrix, rotationVectorValues)
-                    SensorManager.remapCoordinateSystem(
-                        rotationMatrix, SensorManager.AXIS_X, SensorManager.AXIS_Z,
-                        remappedRotationMatrix
-                    )
-                    SensorManager.getOrientation(remappedRotationMatrix, orientations)
-                    lastTime = currentTime
-                }
+            if (event.sensor.type == Sensor.TYPE_ROTATION_VECTOR) {
+                updateOrientation(event.values)
+                //                val currentTime = System.currentTimeMillis()
+                //                if ((currentTime - lastTime) > 0) {
+                //                    rotationVectorValues = lowPass(event.values.clone(), rotationVectorValues)
+                //                    SensorManager.getRotationMatrixFromVector(rotationMatrix, rotationVectorValues)
+                //                    SensorManager.remapCoordinateSystem(
+                //                        rotationMatrix, SensorManager.AXIS_X, SensorManager.AXIS_Z,
+                //                        remappedRotationMatrix
+                //                    )
+                //                    SensorManager.getOrientation(remappedRotationMatrix, orientations)
+                //                    lastTime = currentTime
+                //                }
             }
             if (event.sensor.type == Sensor.TYPE_LINEAR_ACCELERATION) {
                 val x = event.values[0]
@@ -75,9 +86,27 @@ class CameraRenderer(var context: Context) : GLSurfaceView.Renderer {
                 val z = event.values[2]
             }
             if (event.sensor.type == Sensor.TYPE_ACCELEROMETER) {
-                val x = event.values[0]
-                val y = event.values[1]
-                val z = event.values[2]
+                gravity[0] = ALPHA * gravity[0] + (1 - ALPHA) * event.values[0]
+                gravity[1] = ALPHA * gravity[1] + (1 - ALPHA) * event.values[1]
+                gravity[2] = ALPHA * gravity[2] + (1 - ALPHA) * event.values[2]
+
+                // Remove the gravity contribution with the high-pass filter.
+
+                // Remove the gravity contribution with the high-pass filter.
+                acceleration[0] = event.values[0] - gravity[0]
+                acceleration[1] = event.values[1] - gravity[1]
+                acceleration[2] = event.values[2] - gravity[2]
+
+                val dtSeconds: Float = (event.timestamp - oldTime) / 1000000000.0f
+                oldTime = event.timestamp
+
+                velocity[0] = velocity[0] + acceleration[0] * dtSeconds
+                velocity[1] = velocity[1] + acceleration[1] * dtSeconds
+                velocity[2] = velocity[2] + acceleration[2] * dtSeconds
+
+                distance[0] = velocity[0] * dtSeconds
+                distance[1] = velocity[1] * dtSeconds
+                distance[2] = velocity[2] * dtSeconds
             }
             if (event.sensor.type == Sensor.TYPE_GYROSCOPE) {
                 val x = event.values[0]
@@ -101,9 +130,46 @@ class CameraRenderer(var context: Context) : GLSurfaceView.Renderer {
         }
     }
 
+    fun updateOrientation(rotationVector: FloatArray) {
+        val rotationMatrix = FloatArray(9)
+        SensorManager.getRotationMatrixFromVector(rotationMatrix, rotationVector)
+        var axisX: Int? = null
+        var axisY: Int? = null
+        when (windowManager.defaultDisplay.rotation) {
+            Surface.ROTATION_0 -> {
+                axisX = SensorManager.AXIS_X
+                axisY = SensorManager.AXIS_Z
+            }
+            Surface.ROTATION_90 -> {
+                axisX = SensorManager.AXIS_Z
+                axisY = SensorManager.AXIS_MINUS_X
+            }
+            Surface.ROTATION_180 -> {
+                axisX = SensorManager.AXIS_MINUS_X
+                axisY = SensorManager.AXIS_MINUS_Z
+            }
+            Surface.ROTATION_270 -> {
+                axisX = SensorManager.AXIS_Z
+                axisY = SensorManager.AXIS_X
+            }
+        }
+
+        val adjustedRotatedMatrix = FloatArray(9)
+        SensorManager.remapCoordinateSystem(rotationMatrix, axisX!!, axisY!!, adjustedRotatedMatrix)
+
+//        val orientation = FloatArray(3)
+        SensorManager.getOrientation(adjustedRotatedMatrix, orientations)
+        val radToDegree = (-180.0f / Math.PI)
+        val yaw = orientations[0] * radToDegree
+        val pitch = orientations[1] * radToDegree
+        val roll = orientations[2] * radToDegree
+
+    }
+
     init {
         val sensorManager: SensorManager = context.applicationContext.getSystemService(Context.SENSOR_SERVICE) as SensorManager
-        sensorManager.registerListener(listener, sensorManager.getDefaultSensor(Sensor.TYPE_GAME_ROTATION_VECTOR), 1000)
+        windowManager = context.applicationContext.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+        sensorManager.registerListener(listener, sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR), 1000)
         sensorManager.registerListener(listener, sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION), 1)
         sensorManager.registerListener(listener, sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER), 1)
         sensorManager.registerListener(listener, sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE), 1)
@@ -205,8 +271,7 @@ class CameraRenderer(var context: Context) : GLSurfaceView.Renderer {
                 frameAvailable = false
             }
         }
-
-        CameraInterface.onDrawFrame(texMatrix, saturation, contrast, brightness, highlight, shadow, orientations)
+        CameraInterface.onDrawFrame(texMatrix, saturation, contrast, brightness, highlight, shadow, orientations, distance)
 
         if (capture) {
             captureImage(false)

@@ -68,7 +68,7 @@ void Shader::enableVertexAttribArray(GLint index) {
 
 void Shader::vertexAttribPointer(GLint positionHandle, int type, int size, int stride,
                                  const void *data) {
-    glVertexAttribPointer(positionHandle, size, type, false, stride, data);
+    glVertexAttribPointer(positionHandle, size, type, GL_FALSE, stride, data);
 }
 
 void Shader::setUniform4fv(unsigned int location, int size, const float *value) {

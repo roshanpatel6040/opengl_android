@@ -48,6 +48,13 @@ class IntroActivity : AppCompatActivity() {
             val perm = arrayOf(Manifest.permission.CAMERA, Manifest.permission.WRITE_EXTERNAL_STORAGE, Manifest.permission.READ_EXTERNAL_STORAGE)
             ActivityCompat.requestPermissions(this, perm, PERMISSION)
         }
+
+        txt_launching.setOnClickListener {
+            handler.removeCallbacksAndMessages(null)
+            val intent = Intent(this, MainActivity::class.java)
+            startActivity(intent)
+            finishAffinity()
+        }
     }
 
     override fun onDestroy() {

@@ -248,11 +248,11 @@ void drawSquare() {
  */
 void drawPyramid() {
     float vertices[] = {
-            0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f,
-            -1.0f, 0.0f, -1.0f, 0.0f, 1.0f, 1.0f, 1.0f,
-            1.0f, 0.0f, -1.0f, 0.0f, 1.0f, 0.0f, 1.0f,
-            1.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f, 1.0f,
-            -1.0f, 0.0f, 1.0f, 0.7f, 0.3f, 0.5f, 1.0f,
+            0.0f, 1.0f, 0.1f, 1.0f, 0.0f, 1.0f, 1.0f,
+            -1.0f, 0.0f, 0.1f, 0.0f, 1.0f, 1.0f, 1.0f,
+            1.0f, 0.0f, 0.1f, 0.0f, 1.0f, 0.0f, 1.0f,
+            1.0f, 0.0f, 20.0f, 1.0f, 0.0f, 1.0f, 1.0f,
+            -1.0f, 0.0f, 20.0f, 0.7f, 0.3f, 0.5f, 1.0f,
     };
     // Text chords before texture at 4 points(direction)
     // values are fixed 0.0f to 1.0f
@@ -271,31 +271,30 @@ void drawPyramid() {
     // Works from bottom
     glm::mat4 ortho = glm::ortho(-1.0f, (float) 1.0, -1.0f, (float) 1.0, -1.0f,
                                  100.0f);
-    glm::mat4 perspective = glm::perspective(glm::radians(
-            100.0f), // The vertical Field of View, in radians: the amount of "zoom". Think "camera lens". Usually between 90° (extra wide) and 30° (quite zoomed in)
+    glm::mat4 perspective = glm::perspective(90.0f, // The vertical Field of View, in radians: the amount of "zoom". Think "camera lens". Usually between 90° (extra wide) and 30° (quite zoomed in)
                                              (float) windowWidth /
                                              (float) windowHeight,       // Aspect Ratio. Depends on the size of your previewWindow. Notice that 4/3 == 800/600 == 1280/960, sounds familiar ?
                                              0.1f,              // Near clipping plane. Keep as big as possible, or you'll get precision issues.
-                                             50.1f             // Far clipping plane. Keep as little as possible.
+                                             100.0f             // Far clipping plane. Keep as little as possible.
     );
     // Translation
-    glm::mat4 translation = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, 0.0f));
+    glm::mat4 translation = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -2.0f, 0.0f));
     // Scaling
-    glm::mat4 scaleMatrix = glm::scale(glm::mat4(1.0f), glm::vec3(3.0f));
+    glm::mat4 scaleMatrix = glm::scale(glm::mat4(1.0f), glm::vec3(2.0f));
     // Rotation
-    glm::mat4 rotationMatrixX = rotate(glm::mat4(1.0f), glm::radians(30.0f),
+    glm::mat4 rotationMatrixX = rotate(glm::mat4(1.0f), glm::radians(90.0f),
                                        glm::vec3(1.0f, 0.0f, 0.0f));
     glm::mat4 rotationMatrixY = rotate(glm::mat4(1.0f), glm::radians(45.0f),
                                        glm::vec3(0.0f, 1.0f, 0.0f));
     // Camera matrix
     glm::mat4 cameraMatrix = glm::lookAt(
-            glm::vec3(0.0f, 0.0f, 3.0f), // the position of your camera, in world space
+            glm::vec3(0.0f, 0.0f, 1.0f), // the position of your camera, in world space
             glm::vec3(0.0f, 0.0f, 0.0f), // where you want to look at, in world space
             glm::vec3(0.0f, 1.0f,
                       0.0f) // probably glm::vec3(0,1,0), but (0,-1,0) would make you looking upside-down, which can be great too
     );
     // Model matrix
-    glm::mat4 modelMatrix = translation * scaleMatrix;
+    glm::mat4 modelMatrix = translation * rotationMatrixX *  scaleMatrix;
     // final projection
     glm::mat4 projection = perspective * cameraMatrix * modelMatrix;
 
@@ -456,7 +455,7 @@ void rotateModel() {
 }
 
 extern "C" {
-void Java_com_demo_opengl_Render_render(JNIEnv *env, jobject object) {
+void Java_com_demo_opengl_gl_Render_render(JNIEnv *env, jobject object) {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 //    drawSquare();
 //    drawTriangle();
@@ -464,12 +463,12 @@ void Java_com_demo_opengl_Render_render(JNIEnv *env, jobject object) {
 //    loadMultipleTriangles();
 }
 
-void Java_com_demo_opengl_Render_onSurfaceCreated(JNIEnv *env, jobject object) {
+void Java_com_demo_opengl_gl_Render_onSurfaceCreated(JNIEnv *env, jobject object) {
     glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
 }
 
 void
-Java_com_demo_opengl_Render_onSurfaceChanged(JNIEnv *env, jobject object, jint width,
+Java_com_demo_opengl_gl_Render_onSurfaceChanged(JNIEnv *env, jobject object, jint width,
                                              jint height) {
     glViewport(0, 0, width, height);
     windowWidth = width;
@@ -479,14 +478,14 @@ Java_com_demo_opengl_Render_onSurfaceChanged(JNIEnv *env, jobject object, jint w
 }
 
 void
-Java_com_demo_opengl_MainActivity_assetsManager(JNIEnv *env, jobject object,
+Java_com_demo_opengl_ui_MainActivity_assetsManager(JNIEnv *env, jobject object,
                                                 jobject assetsManager) {
     assets = AAssetManager_fromJava(env, assetsManager);
     readObj("models/pyramid.obj");
 }
 
-void
-Java_com_demo_opengl_GlSurface_touchPoints(JNIEnv *env, jobject object, jfloat x, jfloat y) {
+JNIEXPORT void JNICALL
+Java_com_demo_opengl_gl_GlSurface_touchPoints(JNIEnv *env, jobject object, jfloat x, jfloat y) {
     rotateModel();
 }
 }

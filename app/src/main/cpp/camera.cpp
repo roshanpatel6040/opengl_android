@@ -66,13 +66,15 @@ int cameraHeight = 0;
 int detectionWidth = 640;
 int detectionHeight = 480;
 
-Shader shader;
-VertexBuffer vb;
-IndexBuffer ib;
-CameraView camera;
-GLint trianglePositionHandle;
-GLuint triangleProgram;
-GLint triangleColorPositionHandle;
+//Shader shader;
+//VertexBuffer vb;
+//IndexBuffer ib;
+//CameraView camera;
+//GLint trianglePositionHandle;
+//GLuint triangleProgram;
+//GLint triangleColorPositionHandle;
+//GLint projectionLocation;
+//GLint modelLocation;
 
 int textureID;
 GLuint program;
@@ -423,80 +425,6 @@ void createJpegReader() {
 
 void createSurface() {
     AImageReader_getWindow(imageReader, &imageWindow);
-}
-
-void drawTriangle() {
-    int CHORDS_COLOR_PER_VERTEX = 4;
-    int BYTES_PER_FLOAT = 4;
-    float vertices[] = {
-            -1.0f, -1.0f, 50.0f, 1.0f, 0.0f, 0.0f, 1.0f,
-            1.0f, -1.0f, 50.0f, 0.0f, 0.0f, 1.0f, 1.0f,
-            1.0f, -1.0f, 10.0f, 0.0f, 1.0f, 0.0f, 1.0f,
-            -1.0f, -1.0f, 10.0f, 1.0f, 1.0f, 1.0f, 1.0f,
-            0.0f, 1.0f, 30.0f, 0.0f, 0.0f, 0.0f, 1.0f};
-
-    unsigned int indices[] = {2, 4, 3,   // front face (CCW)
-                              1, 4, 2,   // right face
-                              0, 4, 1,   // back face
-                              4, 0, 3};
-
-    float color[] = {1.0f, 0.5f, 0.0f, 1.0f};
-
-    // varying field uses to transfer data between vertex and fragment shader
-    std::string vertexShaderCode = "attribute vec3 position;\n"
-                                   "attribute vec4 v_color;\n"
-                                   "uniform mat4 mvp;\n"
-                                   "uniform mat4 model;\n"
-                                   "uniform mat4 projection;\n"
-                                   "uniform mat4 camera;\n"
-                                   "varying vec4 f_color;\n" // Passes to fragment shader
-                                   "void main()\n"
-                                   "{\n"
-                                   " f_color = v_color;\n"
-                                   " gl_Position = projection * camera * model * vec4(position,1.0f);\n"
-                                   "}";
-    std::string fragmentShaderCode = "uniform vec4 color;\n" // Get using uniform location
-                                     "varying vec4 f_color;\n" // Get from vertex shader
-                                     "void main()\n"
-                                     "{\n"
-                                     " gl_FragColor = f_color;\n"
-                                     //                                " gl_FragColor = color;\n"
-                                     "}";
-
-//    glEnable(GL_DEPTH_TEST);
-//    glDepthFunc(GL_LEQUAL);
-    glEnable(GL_CULL_FACE);
-    glCullFace(GL_FRONT_FACE);
-    GLCall(triangleProgram = glCreateProgram())
-    GLCall(shader = Shader(triangleProgram, vertexShaderCode, fragmentShaderCode))
-
-    GLCall(vb = VertexBuffer(vertices, sizeof(vertices)))
-    GLCall(ib = IndexBuffer(indices, sizeof(indices)))
-    GLCall(vb.bind())
-    GLCall(ib.bind())
-
-    GLCall(glLinkProgram(triangleProgram))
-    GLCall(glUseProgram(triangleProgram))
-
-    GLCall(trianglePositionHandle = shader.getAttributeLocation("position"))
-    GLCall(shader.vertexAttribPointer(trianglePositionHandle, GL_FLOAT, 3, 7 * sizeof(float),
-                                      (GLvoid *) nullptr))
-    GLCall(shader.enableVertexAttribArray(trianglePositionHandle))
-
-    GLCall(triangleColorPositionHandle = shader.getAttributeLocation("v_color"))
-    GLCall(shader.vertexAttribPointer(triangleColorPositionHandle, GL_FLOAT, 4, 7 * sizeof(float),
-                                      (GLvoid *) (3 * sizeof(float))))
-    GLCall(shader.enableVertexAttribArray(triangleColorPositionHandle))
-
-    GLCall(int colorHandle = shader.getUniformLocation("color"))
-    GLCall(shader.setUniform4fv(colorHandle,
-                                sizeof(color) / CHORDS_COLOR_PER_VERTEX / BYTES_PER_FLOAT, color))
-
-    camera = CameraView();
-    camera.setLocation(triangleProgram, "camera");
-
-
-    isTriangleDrawn = true;
 }
 
 string getCameraId() {
@@ -854,12 +782,13 @@ void Java_com_demo_opengl_provider_CameraInterface_onSurfaceCreated(JNIEnv *jni,
     __android_log_print(ANDROID_LOG_ERROR, "OpenGL version", "%s", glGetString(GL_VERSION));
     __android_log_print(ANDROID_LOG_ERROR, "OpenGL shader version", "%s",
                         glGetString(GL_SHADING_LANGUAGE_VERSION));
-    GLCall(glDisable(GL_DITHER))
-    GLCall(glEnable(GL_FRAMEBUFFER_SRGB_EXT))
+//    GLCall(glEnable(GL_DEPTH_TEST))
+    GLCall(glEnable(GL_BLEND))
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE);
     GLCall(program = glCreateProgram())
     GLCall(Shader shader = Shader(program, vertexShaderCode, fragmentShaderCode))
 
-    GLCall(glBindAttribLocation(program, 0, "position"))
+//    GLCall(glBindAttribLocation(program, 0, "position"))
 
     GLCall(glLinkProgram(program))
 
@@ -901,7 +830,7 @@ void Java_com_demo_opengl_provider_CameraInterface_onSurfaceCreated(JNIEnv *jni,
         __android_log_print(ANDROID_LOG_ERROR, "Lut texture", "%s", "Failed");
     }
 
-    GLCall(glGenBuffers(4, arrayBuffer))
+    GLCall(glGenBuffers(2, arrayBuffer))
     GLCall(glBindBuffer(GL_ARRAY_BUFFER, arrayBuffer[0]))
     GLCall(glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_DYNAMIC_DRAW))
 
@@ -923,23 +852,18 @@ void Java_com_demo_opengl_provider_CameraInterface_onSurfaceCreated(JNIEnv *jni,
     GLCall(lutTextureLocation = glGetUniformLocation(program, "textureLut"))
 
     // Create face filter program
-    GLCall(faceFilterProgram = glCreateProgram())
-    GLCall(Shader faceFilterShader = Shader(faceFilterProgram, faceFilterVertexCode, faceFilterFragmentCode))
-    GLCall(glLinkProgram(faceFilterProgram))
-
-    GLCall(glBindBuffer(GL_ARRAY_BUFFER, arrayBuffer[2]))
-    GLCall(glBufferData(GL_ARRAY_BUFFER, sizeof(detectionVertices), nullptr, GL_DYNAMIC_DRAW))
-
-    unsigned int filterOrder[] = {2, 1, 0, 0, 3, 2};
-    GLCall(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, arrayBuffer[3]))
-    GLCall(glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(filterOrder), filterOrder, GL_STATIC_DRAW))
-
-    GLCall(faceFilterPositionLocation = glGetAttribLocation(faceFilterProgram, "position"))
-    GLCall(faceFilterMvpLocation = glGetAttribLocation(faceFilterProgram, "u_MVP"))
+//    GLCall(faceFilterProgram = glCreateProgram())
+//    GLCall(Shader faceFilterShader = Shader(faceFilterProgram, faceFilterVertexCode, faceFilterFragmentCode))
+//    GLCall(glLinkProgram(faceFilterProgram))
+//    GLCall(glBindBuffer(GL_ARRAY_BUFFER, arrayBuffer[2]))
+//    GLCall(glBufferData(GL_ARRAY_BUFFER, sizeof(detectionVertices), nullptr, GL_DYNAMIC_DRAW))
+//    unsigned int filterOrder[] = {2, 1, 0, 0, 3, 2};
+//    GLCall(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, arrayBuffer[3]))
+//    GLCall(glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(filterOrder), filterOrder, GL_STATIC_DRAW))
+//    GLCall(faceFilterPositionLocation = glGetAttribLocation(faceFilterProgram, "position"))
+//    GLCall(faceFilterMvpLocation = glGetAttribLocation(faceFilterProgram, "u_MVP"))
 
     startCamera(jni, object);
-
-    drawTriangle();
 }
 
 void Java_com_demo_opengl_provider_CameraInterface_onSurfaceChanged(JNIEnv *jni,
@@ -955,18 +879,21 @@ void Java_com_demo_opengl_provider_CameraInterface_onSurfaceChanged(JNIEnv *jni,
 
 }
 void
-Java_com_demo_opengl_provider_CameraInterface_onDrawFrame(JNIEnv *jni, jobject object,
-                                                          jfloatArray array,
+Java_com_demo_opengl_provider_CameraInterface_onDrawFrame(JNIEnv *jni, jobject object, jfloatArray array,
                                                           jfloat saturation,
                                                           jfloat contrast,
                                                           jfloat brightness,
                                                           jfloat highlight,
-                                                          jfloat shadow, jfloatArray orientation) {
-    glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-    glClearDepthf(1.0f);
+                                                          jfloat shadow,
+                                                          jfloatArray orientation,
+                                                          jfloatArray distance) {
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     GLCall(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT))
 
     GLCall(glUseProgram(program))
+
+    float aspect = windowWidth > windowHeight ? float(windowWidth) / float(windowHeight) :
+                   float(windowHeight) / float(windowWidth);
 
     float mvp[] = {
             1.0f, 0.0f, 0.0f, 0.0f,
@@ -974,13 +901,11 @@ Java_com_demo_opengl_provider_CameraInterface_onDrawFrame(JNIEnv *jni, jobject o
             0.0f, 0.0f, 1.0f, 0.0f,
             0.0f, 0.0f, 0.0f, 1.0f,
     };
-
-    float aspect = windowWidth > windowHeight ? float(windowWidth) / float(windowHeight) :
-                   float(windowHeight) / float(windowWidth);
     if (windowWidth < windowHeight) // portrait
-        ortho(mvp, -0.823333f, 0.823333f, -1.0, 1.0, -1.0f, 1.0f);
+        ortho(mvp, -1.0f, 1.0f, -1.0, 1.0, -1.0f, 1.0f);
     else // landscape
         ortho(mvp, -aspect, aspect, -1.0f, 1.0f, -1.0f, 1.0f);
+
 
     GLCall(glUniformMatrix4fv(mvpLocation, 1, false, mvp))
 
@@ -991,7 +916,6 @@ Java_com_demo_opengl_provider_CameraInterface_onDrawFrame(JNIEnv *jni, jobject o
     GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE))
     GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE))
 
-// Pass SurfaceTexture transformations to shader
     float *tm = jni->GetFloatArrayElements(array, nullptr);
     GLCall(glUniformMatrix4fv(matrixLocation, 1, false, tm))
     jni->ReleaseFloatArrayElements(array, tm, 0);
@@ -1048,39 +972,124 @@ Java_com_demo_opengl_provider_CameraInterface_onDrawFrame(JNIEnv *jni, jobject o
 //    GLCall(glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr))
 //    GLCall(glDisableVertexAttribArray(faceFilterPositionLocation))
 
+    // Draw Triangle
+    float vertices[] = {
+            -0.5f, -0.5f, 0.0f, 0.0f, 0.0f, // 0
+            -0.5f, 0.5f, 0.0f, 0.0f, 1.0f,// 1
+            0.5f, 0.5f, 0.0f, 1.0f, 1.0f,// 2
+            0.5f, -0.5f, 0.0f, 1.0f, 0.0f// 3
+    };
+
+    unsigned int indices[] = {2, 1, 0, 0, 3, 2};
+
+    float color[] = {1.0f, 0.5f, 0.0f, 0.5f};
+
+    // varying field uses to transfer data between vertex and fragment shader
+    std::string vertexShaderCode = "#version 320 es\n"
+                                   "in vec3 position;\n"
+                                   "in vec2 texCord;\n"
+                                   "in vec4 v_color;\n"
+                                   "uniform mat4 mvp;\n"
+                                   "uniform mat4 model;\n"
+                                   "uniform mat4 projection;\n"
+                                   "uniform mat4 camera;\n"
+                                   "out vec4 f_color;\n"
+                                   "out vec2 f_chord;\n" // Passes to fragment shader
+                                   "void main()\n"
+                                   "{\n"
+                                   " f_color = v_color;\n"
+                                   "f_chord = texCord;\n"
+                                   " gl_Position = projection * camera * model * vec4(position,1.0);\n"
+                                   "}";
+    std::string fragmentShaderCode =
+//            "uniform vec4 color;\n" // Get using uniform location
+            "#version 320 es\n"
+            "precision mediump float;\n"
+            "in vec4 f_color;\n"
+            "in vec2 f_chord;\n"
+            "uniform highp sampler2D tTexture;\n"
+            "out vec4 color;" // Get from vertex shader
+            "void main()\n"
+            "{\n"
+            "color = texture(tTexture,f_chord);\n"
+            //                                " color = color;\n"
+            "}";
+
+    GLCall(GLuint triangleProgram = glCreateProgram())
+    GLCall(Shader shader = Shader(triangleProgram, vertexShaderCode, fragmentShaderCode))
+    GLCall(glLinkProgram(triangleProgram))
+    GLboolean isProgram = glIsProgram(triangleProgram);
+    if (isProgram == GL_FALSE) {
+        __android_log_print(ANDROID_LOG_ERROR, "OpenGL isProgram", "%s", "Failed");
+    }
+    GLint status;
+    glGetProgramiv(triangleProgram, GL_LINK_STATUS, &status);
+    if (status == GL_FALSE) {
+        __android_log_print(ANDROID_LOG_ERROR, "OpenGL program status", "%s", "Failed");
+        GLsizei logLength;
+        GLchar log[1024];
+        glGetProgramInfoLog(program, sizeof(log), &logLength, log);
+        __android_log_print(ANDROID_LOG_ERROR, "OpenGL program status", "%s", log);
+    }
+    GLCall(VertexBuffer vb(vertices, sizeof(vertices)))
+    GLCall(IndexBuffer ib(indices, sizeof(indices)))
+    GLCall(vb.bind())
+    GLCall(ib.bind())
     GLCall(glUseProgram(triangleProgram))
-// Pass SurfaceTexture transformations to shader
-    float *ot = jni->GetFloatArrayElements(orientation, nullptr);
-//    vb.bind();
-//    ib.bind();
-    GLCall(shader.enableVertexAttribArray(trianglePositionHandle))
-//
-//    GLCall(shader.vertexAttribPointer(trianglePositionHandle, GL_FLOAT, 3, 7 * sizeof(float),
-//                                      (GLvoid *) nullptr))
-    GLCall(shader.enableVertexAttribArray(triangleColorPositionHandle))
-//    GLCall(shader.vertexAttribPointer(triangleColorPositionHandle, GL_FLOAT, 4, 7 * sizeof(float),
-//                                      (GLvoid *) (3 * sizeof(float))))
-
-    camera.changeCamera(ot);
-    glm::mat4 prespective = glm::perspective(glm::radians(45.0f), float(windowWidth) / float(windowHeight), 0.1f, 100.0f);
-    glm::mat4 translate = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, 0.0f));
-//    glm::quat newRotation = glm::quat(glm::vec3(ot[0], ot[1], ot[2]));
-//    glm::mat4 nR = glm::toMat4(newRotation);
-    jni->ReleaseFloatArrayElements(orientation, ot, 0);
-//    translate = glm::rotate(translate, 90.0f, glm::vec3(0.0f, 0.0f, 0.0f));
-
+    Texture texture1("/storage/emulated/0/sample_tatoo.png", 0, 4,
+                     GL_RGBA);
+    GLCall(GLuint trianglePositionHandle = shader.getAttributeLocation("position"))
+    GLCall(GLuint triangleColorPositionHandle = shader.getAttributeLocation("v_color"))
     GLCall(GLuint projectionLocation = shader.getUniformLocation("projection"))
-    GLCall(shader.setUniformMatrix4fv(projectionLocation, 1, glm::value_ptr(prespective)))
-
     GLCall(GLuint modelLocation = shader.getUniformLocation("model"))
+    GLCall(GLuint texChordLocation = shader.getAttributeLocation("texCord"))
+    GLCall(GLuint textureLocation = shader.getUniformLocation("tTexture"))
+    CameraView camera;
+    camera.setLocation(triangleProgram, "camera");
+
+    GLCall(shader.vertexAttribPointer(trianglePositionHandle, GL_FLOAT, 3, 5 * sizeof(float),
+                                      (GLvoid *) nullptr))
+    GLCall(shader.enableVertexAttribArray(trianglePositionHandle))
+
+    GLCall(shader.enableVertexAttribArray(texChordLocation))
+    GLCall(shader.vertexAttribPointer(texChordLocation, GL_FLOAT, 2, 5 * sizeof(float), (GLvoid *) (3 * sizeof(float))))
+
+    // don't bind with reference id
+    // Bind with texture slot for which texture is created
+    shader.setUniform1i(textureLocation, 0);
+
+//    GLCall(shader.vertexAttribPointer(triangleColorPositionHandle, GL_FLOAT, 4, 7 * sizeof(float),(GLvoid *) (3 * sizeof(float))))
+//    GLCall(shader.enableVertexAttribArray(triangleColorPositionHandle))
+
+//    GLCall(int colorHandle = shader.getUniformLocation("color"))
+//    GLCall(shader.setUniform4fv(colorHandle,
+//            sizeof(color) / CHORDS_COLOR_PER_VERTEX / BYTES_PER_FLOAT, color))
+
+    isTriangleDrawn = true;
+
+    float *dis = jni->GetFloatArrayElements(distance, nullptr);
+    jni->ReleaseFloatArrayElements(distance, dis, 0);
+
+    float *ot = jni->GetFloatArrayElements(orientation, nullptr);
+
+    camera.changeCamera(ot, dis);
+    glm::mat4 prespective = glm::perspective(glm::radians(45.0f), float(windowWidth) / float(windowHeight), 0.1f, 100.0f);
+    glm::mat4 translate = glm::mat4(1.0f);
+//    translate = glm::rotate(translate,glm::radians(90.0f),glm::vec3(0.0f,1.0f,0.0f));
+    jni->ReleaseFloatArrayElements(orientation, ot, 0);
+
+    GLCall(shader.setUniformMatrix4fv(projectionLocation, 1, glm::value_ptr(prespective)))
     GLCall(shader.setUniformMatrix4fv(modelLocation, 1, glm::value_ptr(translate)))
     GLCall(camera.useCamera())
 
-    GLCall(glDrawArrays(GL_TRIANGLES, 0, ib.getCount()))
+    GLCall(glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr))
     GLCall(shader.disableVertexAttribPointer(trianglePositionHandle))
-    GLCall(shader.disableVertexAttribPointer(triangleColorPositionHandle))
-//    GLCall(ib.unBind())
-//    GLCall(vb.unBind())
+    GLCall(shader.disableVertexAttribPointer(texChordLocation))
+//    GLCall(shader.disableVertexAttribPointer(triangleColorPositionHandle))
+    GLCall(texture1.unBind())
+    GLCall(vb.unBind())
+    GLCall(ib.unBind())
+
 
 }
 

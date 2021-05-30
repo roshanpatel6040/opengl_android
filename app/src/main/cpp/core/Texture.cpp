@@ -43,8 +43,8 @@ Texture::Texture(std::string path, int slot, int channel, int type) : slot(slot)
 
     // Free image allocation bugger
     if (allocationBuffer) {
-        __android_log_print(ANDROID_LOG_DEBUG, "Texture", "width:%i height:%i", width,
-                            height);
+        __android_log_print(ANDROID_LOG_DEBUG, "Texture", "width:%i height:%i , total channels:%d", width,
+                            height,bpp);
         stbi_image_free(allocationBuffer);
     } else {
         __android_log_print(ANDROID_LOG_ERROR, "Texture", "Failed");
