@@ -1,0 +1,12 @@
+name: build_apk
+on: [ workflow_dispatch ]
+jobs:
+  generate_apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: gradle/gradle-build-action@v2
+        with:
+          gradle-version: release-candidate
+      - run: ./gradlew buildDebug
+
