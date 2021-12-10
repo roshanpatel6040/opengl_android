@@ -1,0 +1,21 @@
+name: build_apk
+on: 
+  pull_request:
+    branches:
+    - master
+  workflow_dispatch:  
+jobs:
+  generate_apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-java@v2
+        with:
+          java-version: '11'
+          cache: gradle
+      - uses: gradle/gradle-build-action@v2
+        with:
+          gradle-version: release-candidate
+      - run: chmod +x gradlew
+      - run: ./gradlew assembleDebug
+
