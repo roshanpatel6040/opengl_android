@@ -13,6 +13,7 @@ jobs:
       - uses: actions/setup-java@v1
         with:
           java-version: '1.8'
+      - run: chmod +x build.gradle    
       - run: ./gradlew assembleDebug
       - uses: actions/upload-artifact@v2
         with:
