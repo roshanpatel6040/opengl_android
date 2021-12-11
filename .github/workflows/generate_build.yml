@@ -1,5 +1,8 @@
 name: build_apk
-on: 
+on:
+  pull_request:
+    branches:
+      - master
   workflow_dispatch:  
 jobs:
   generate_apk:
