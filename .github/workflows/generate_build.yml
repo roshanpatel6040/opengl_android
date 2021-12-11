@@ -1,5 +1,8 @@
 name: build_apk
 on:
+  push:
+    branches:
+      - master
   pull_request:
     branches:
       - master
