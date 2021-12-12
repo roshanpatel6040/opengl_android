@@ -43,7 +43,6 @@
 #include "camera/NdkCameraManager.h"
 #include "camera/NdkCameraMetadata.h"
 #include "camera/NdkCameraMetadataTags.h"
-#include "Camera/NdkCaptureRequest.h"
 #include "camera/NdkCameraWindowType.h"
 #include "android/native_window.h"
 #include "android/native_activity.h"
