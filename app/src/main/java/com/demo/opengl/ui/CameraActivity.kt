@@ -25,9 +25,10 @@ import kotlinx.android.synthetic.main.activity_camera.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import java.io.File
+import java.io.*
 
-class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener, View.OnClickListener, CaptureListener {
+class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener, View.OnClickListener,
+    CaptureListener {
 
     companion object {
         private const val TAG = "CameraActivity"
@@ -55,11 +56,19 @@ class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener, Vie
         setContentView(R.layout.activity_camera)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 //        previewWindow.setFlags(WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS, WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS)
-
         initView()
     }
 
     private fun initView() {
+        val file = File(getExternalFilesDir(null), "models")
+        if (!file.exists()) {
+            file.mkdirs()
+            val fis = FileOutputStream(File(file, "pyramid.obj"))
+            val inputStream = assets.open("models/pyramid.obj")
+            fis.write(inputStream.readBytes())
+            fis.close()
+            inputStream.close()
+        }
         setup()
         CameraInterface.initialize()
         surface.getRenderer().setCaptureListener(this)
@@ -106,7 +115,13 @@ class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener, Vie
             isImageProcessing = true
             CoroutineScope(Dispatchers.Default).launch {
                 try {
-                    val image = InputImage.fromByteArray(byteArray, 640, 480, 270, InputImage.IMAGE_FORMAT_NV21)
+                    val image = InputImage.fromByteArray(
+                        byteArray,
+                        640,
+                        480,
+                        270,
+                        InputImage.IMAGE_FORMAT_NV21
+                    )
                     detector.process(image).addOnSuccessListener {
                         it.forEach { face ->
                             CameraInterface.boundingBox(face.boundingBox)
@@ -186,7 +201,11 @@ class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener, Vie
 
     override fun onCapturedFailed(e: Exception) {
         CoroutineScope(Dispatchers.Main).launch {
-            Snackbar.make(findViewById(android.R.id.content), "Failed to capture", Snackbar.LENGTH_SHORT).show()
+            Snackbar.make(
+                findViewById(android.R.id.content),
+                "Failed to capture",
+                Snackbar.LENGTH_SHORT
+            ).show()
         }
     }
 
@@ -205,7 +224,10 @@ class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener, Vie
                 changeMode(mode)
             }
             R.id.img_captured -> {
-                val intent = Intent(this, PreviewActivity::class.java).putExtra(Constants.PREVIEW_PATH, img_captured.tag as String)
+                val intent = Intent(this, PreviewActivity::class.java).putExtra(
+                    Constants.PREVIEW_PATH,
+                    img_captured.tag as String
+                )
                 startActivity(intent)
             }
         }

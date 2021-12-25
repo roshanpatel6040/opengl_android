@@ -2,6 +2,7 @@
 // Created by Roshan
 //
 
+#include <vector>
 #include <cstdio>
 #include <unistd.h>
 #include <jni.h>
@@ -36,6 +37,7 @@
 #include "core/headers/Renderer.h"
 #include "core/headers/Shader.h"
 #include "core/headers/Texture.h"
+#include "core/headers/Mesh.h"
 #include "core/headers/VertexBuffer.h"
 #include "camera/NdkCameraCaptureSession.h"
 #include "camera/NdkCameraDevice.h"
@@ -53,6 +55,9 @@
 #include "thread"
 
 #include "android/sensor.h"
+#include "assimp/Importer.hpp"
+#include "assimp/scene.h"
+#include <assimp/port/AndroidJNI/AndroidJNIIOSystem.h>
 
 using namespace std;
 
@@ -64,16 +69,6 @@ int cameraHeight = 0;
 
 int detectionWidth = 640;
 int detectionHeight = 480;
-
-//Shader shader;
-//VertexBuffer vb;
-//IndexBuffer ib;
-//CameraView camera;
-//GLint trianglePositionHandle;
-//GLuint triangleProgram;
-//GLint triangleColorPositionHandle;
-//GLint projectionLocation;
-//GLint modelLocation;
 
 int textureID;
 GLuint program;
@@ -93,10 +88,6 @@ GLuint textureLutReferenceID;
 GLuint lutTextureLocation;
 float applyAwb = 0;
 
-GLuint faceFilterProgram;
-GLuint faceFilterPositionLocation;
-GLuint faceFilterMvpLocation;
-
 ACameraManager *cameraManager;
 ACameraDevice *cameraDevice;
 ACaptureRequest *previewRequest;
@@ -115,29 +106,13 @@ ACameraMetadata *cameraMetadata;
 ACameraMetadata_const_entry entry = {0};
 
 ASensorManager *sensorManager;
-
-bool isTriangleDrawn = false;
+AAssetManager *assetManager;
 
 JavaVM *javaVM = nullptr;
 jclass activityClass;
 jobject activityObj;
 
-float detectionVertices[12];
-
-const string faceFilterVertexCode = "#version 320 es\n"
-                                    "in vec3 position;\n"
-                                    "uniform mat4 u_MVP;\n"
-                                    "void main()\n"
-                                    "{\n"
-                                    "gl_Position = u_MVP * vec4(position,1.0);\n"
-                                    "}";
-const string faceFilterFragmentCode = "#version 320 es\n"
-                                      "precision highp float;\n"
-                                      "out vec4 fragColor;\n"
-                                      "void main()\n"
-                                      "{\n"
-                                      "fragColor = vec4(0.0,0.2,0.1,0.5);\n"
-                                      "}";
+Mesh *mesh;
 
 const string vertexShaderCode = "#version 320 es\n"
                                 "in vec3 position;\n"
@@ -383,7 +358,8 @@ static void imageCallback(void *context, AImageReader *reader) {
         jmethodID methodId = (*env).GetMethodID(activityClass, "runDetection", "([B)V");
 
         jbyteArray byteArray = env->NewByteArray(yl + ul + vl);
-        (*env).SetByteArrayRegion(byteArray, 0, yl + ul + vl, reinterpret_cast<const jbyte *>(yuvData));
+        (*env).SetByteArrayRegion(byteArray, 0, yl + ul + vl,
+                                  reinterpret_cast<const jbyte *>(yuvData));
         (*env).CallVoidMethod(activityObj, methodId, byteArray);
 
 //    env->ReleaseByteArrayElements(byteArray, reinterpret_cast<jbyte *>(data), JNI_ABORT);
@@ -411,7 +387,8 @@ static void imageCallback(void *context, AImageReader *reader) {
 }
 
 void createJpegReader() {
-    media_status_t status = AImageReader_new(detectionWidth, detectionHeight, AIMAGE_FORMAT_YUV_420_888, 2, &imageReader);
+    media_status_t status = AImageReader_new(detectionWidth, detectionHeight,
+                                             AIMAGE_FORMAT_YUV_420_888, 2, &imageReader);
     if (status != AMEDIA_OK) {
         __android_log_print(ANDROID_LOG_ERROR, "Camera Reader", "%d", status);
     }
@@ -521,7 +498,7 @@ void createEglContext(JNIEnv *env, jobject surface) {
                     EGL_NONE};
 
     static EGLint const context_list[] =
-            {EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE};
+            {EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE};
 
     EGLDisplay eglDisplay;
     EGLConfig eglConfig;
@@ -571,7 +548,8 @@ void createEglContext(JNIEnv *env, jobject surface) {
 void openCamera(JNIEnv *env, jobject object) {
     string cameraID = getCameraId();
     // Open camera
-    Camera(ACameraManager_openCamera(cameraManager, cameraID.c_str(), &stateCallbacks, &cameraDevice))
+    Camera(ACameraManager_openCamera(cameraManager, cameraID.c_str(), &stateCallbacks,
+                                     &cameraDevice))
     cameraDetails(cameraID, env, object);
 }
 
@@ -587,7 +565,8 @@ void autoMode() {
     Camera(ACaptureRequest_setEntry_u8(previewRequest, ACAMERA_CONTROL_AF_MODE, 1, &controlAfMode))
 
     uint8_t controlAWBMode = ACAMERA_CONTROL_AWB_MODE_AUTO;
-    Camera(ACaptureRequest_setEntry_u8(previewRequest, ACAMERA_CONTROL_AWB_MODE, 1, &controlAWBMode))
+    Camera(ACaptureRequest_setEntry_u8(previewRequest, ACAMERA_CONTROL_AWB_MODE, 1,
+                                       &controlAWBMode))
 
     uint8_t controlAEMode = ACAMERA_CONTROL_AE_MODE_ON;
     Camera(ACaptureRequest_setEntry_u8(previewRequest, ACAMERA_CONTROL_AE_MODE, 1, &controlAEMode))
@@ -607,20 +586,24 @@ void detectionMode() {
     Camera(ACaptureRequest_setEntry_u8(previewRequest, ACAMERA_CONTROL_AF_MODE, 1, &controlAfMode))
 
     uint8_t controlAWBMode = ACAMERA_CONTROL_AWB_MODE_AUTO;
-    Camera(ACaptureRequest_setEntry_u8(previewRequest, ACAMERA_CONTROL_AWB_MODE, 1, &controlAWBMode))
+    Camera(ACaptureRequest_setEntry_u8(previewRequest, ACAMERA_CONTROL_AWB_MODE, 1,
+                                       &controlAWBMode))
 
     const uint8_t correctionMode = ACAMERA_COLOR_CORRECTION_MODE_TRANSFORM_MATRIX;
-    Camera(ACaptureRequest_setEntry_u8(previewRequest, ACAMERA_COLOR_CORRECTION_MODE, 1, &correctionMode))
+    Camera(ACaptureRequest_setEntry_u8(previewRequest, ACAMERA_COLOR_CORRECTION_MODE, 1,
+                                       &correctionMode))
 
     const float gainValues[] = {1.0, 0.0, 0.0, 0.0};
-    Camera(ACaptureRequest_setEntry_float(previewRequest, ACAMERA_COLOR_CORRECTION_GAINS, 1, reinterpret_cast<const float *>(&gainValues)))
+    Camera(ACaptureRequest_setEntry_float(previewRequest, ACAMERA_COLOR_CORRECTION_GAINS, 1,
+                                          reinterpret_cast<const float *>(&gainValues)))
 
     // Turn off AE to apply sensor sensitivity and exposure time
     uint8_t controlAEMode = ACAMERA_CONTROL_AE_MODE_OFF;
     Camera(ACaptureRequest_setEntry_u8(previewRequest, ACAMERA_CONTROL_AE_MODE, 1, &controlAEMode))
 
     int32_t exposureCompensationValue = -12;
-    Camera(ACaptureRequest_setEntry_i32(previewRequest, ACAMERA_CONTROL_AE_EXPOSURE_COMPENSATION, 1, &exposureCompensationValue))
+    Camera(ACaptureRequest_setEntry_i32(previewRequest, ACAMERA_CONTROL_AE_EXPOSURE_COMPENSATION, 1,
+                                        &exposureCompensationValue))
 
     int32_t orientation = 90;
     Camera(ACaptureRequest_setEntry_i32(previewRequest, ACAMERA_JPEG_ORIENTATION, 1, &orientation))
@@ -629,7 +612,8 @@ void detectionMode() {
     Camera(ACaptureRequest_setEntry_i32(previewRequest, ACAMERA_SENSOR_SENSITIVITY, 1, &sensor))
 
     int64_t sensorExposureTime = 30000000;
-    Camera(ACaptureRequest_setEntry_i64(previewRequest, ACAMERA_SENSOR_EXPOSURE_TIME, 1, &sensorExposureTime))
+    Camera(ACaptureRequest_setEntry_i64(previewRequest, ACAMERA_SENSOR_EXPOSURE_TIME, 1,
+                                        &sensorExposureTime))
 
 //    const int64_t frameDuration = 3000000;
 //    camera_status_t sensorFrameDurationStatus = ACaptureRequest_setEntry_i64(previewRequest,ACAMERA_SENSOR_FRAME_DURATION,1,&frameDuration);
@@ -656,7 +640,8 @@ void startCamera(JNIEnv *env, jobject object) {
     Camera(ACameraDevice_createCaptureRequest(cameraDevice, TEMPLATE_PREVIEW, &previewRequest))
 
     // Create capture request
-    Camera(ACameraDevice_createCaptureRequest(cameraDevice, TEMPLATE_STILL_CAPTURE, &captureRequest))
+    Camera(ACameraDevice_createCaptureRequest(cameraDevice, TEMPLATE_STILL_CAPTURE,
+                                              &captureRequest))
 
     // Prepare preview output
     Camera(ACaptureSessionOutput_create(previewWindow, &previewSessionOutput))
@@ -673,7 +658,8 @@ void startCamera(JNIEnv *env, jobject object) {
 //    Camera(ACaptureRequest_addTarget(previewRequest, captureOutputTarget))
 
     // Create capture session
-    Camera(ACameraDevice_createCaptureSession(cameraDevice, previewSessionOutputContainer, &sessionCallbacks, &session))
+    Camera(ACameraDevice_createCaptureSession(cameraDevice, previewSessionOutputContainer,
+                                              &sessionCallbacks, &session))
 
     detectionMode();
 }
@@ -711,6 +697,8 @@ void Java_com_demo_opengl_ui_CameraActivity_setup(JNIEnv *jni, jobject object) {
     jclass cls = jni->GetObjectClass(object);
     activityClass = (jclass) jni->NewGlobalRef(cls);
     activityObj = jni->NewGlobalRef(object);
+    jmethodID id = jni->GetMethodID(cls, "getAssets", "()Landroid/content/res/AssetManager;");
+    assetManager = AAssetManager_fromJava(jni, jni->CallObjectMethod(object, id));
 }
 
 void Java_com_demo_opengl_provider_CameraInterface_initialize(JNIEnv *jni, jobject object) {
@@ -729,7 +717,8 @@ void Java_com_demo_opengl_provider_CameraInterface_closeCamera(JNIEnv *jni, jobj
     closeCamera();
 }
 
-void Java_com_demo_opengl_provider_CameraInterface_changeExposure(JNIEnv *jni, jobject object, jint exposure) {
+void Java_com_demo_opengl_provider_CameraInterface_changeExposure(JNIEnv *jni, jobject object,
+                                                                  jint exposure) {
     int64_t sensorExposureTime = exposure;
     camera_status_t expTimeStatus = ACaptureRequest_setEntry_i64(previewRequest,
                                                                  ACAMERA_SENSOR_EXPOSURE_TIME, 1,
@@ -765,7 +754,7 @@ void Java_com_demo_opengl_provider_CameraInterface_onSurfaceCreated(JNIEnv *jni,
 
     // Create previewWindow with surface
     previewWindow = ANativeWindow_fromSurface(jni, surface);
-//    createEglContext(jni, surface);
+    // createEglContext(jni, surface);
 
     float vertices[] = {
             -1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
@@ -850,19 +839,11 @@ void Java_com_demo_opengl_provider_CameraInterface_onSurfaceCreated(JNIEnv *jni,
     GLCall(awbLocation = glGetUniformLocation(program, "u_awb"))
     GLCall(lutTextureLocation = glGetUniformLocation(program, "textureLut"))
 
-    // Create face filter program
-//    GLCall(faceFilterProgram = glCreateProgram())
-//    GLCall(Shader faceFilterShader = Shader(faceFilterProgram, faceFilterVertexCode, faceFilterFragmentCode))
-//    GLCall(glLinkProgram(faceFilterProgram))
-//    GLCall(glBindBuffer(GL_ARRAY_BUFFER, arrayBuffer[2]))
-//    GLCall(glBufferData(GL_ARRAY_BUFFER, sizeof(detectionVertices), nullptr, GL_DYNAMIC_DRAW))
-//    unsigned int filterOrder[] = {2, 1, 0, 0, 3, 2};
-//    GLCall(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, arrayBuffer[3]))
-//    GLCall(glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(filterOrder), filterOrder, GL_STATIC_DRAW))
-//    GLCall(faceFilterPositionLocation = glGetAttribLocation(faceFilterProgram, "position"))
-//    GLCall(faceFilterMvpLocation = glGetAttribLocation(faceFilterProgram, "u_MVP"))
-
     startCamera(jni, object);
+
+    mesh = new Mesh(assetManager);
+    bool isLoaded = mesh->LoadMesh("pyramid.obj");
+    __android_log_print(ANDROID_LOG_ERROR, "Model loading", "loaded %d", isLoaded);
 }
 
 void Java_com_demo_opengl_provider_CameraInterface_onSurfaceChanged(JNIEnv *jni,
@@ -874,11 +855,13 @@ void Java_com_demo_opengl_provider_CameraInterface_onSurfaceChanged(JNIEnv *jni,
     windowWidth = width;
     windowHeight = height;
     ANativeWindow_acquire(previewWindow);
-    ANativeWindow_setBuffersGeometry(previewWindow, windowWidth, windowHeight, WINDOW_FORMAT_RGBA_8888);
+    ANativeWindow_setBuffersGeometry(previewWindow, windowWidth, windowHeight,
+                                     WINDOW_FORMAT_RGBA_8888);
 
 }
 void
-Java_com_demo_opengl_provider_CameraInterface_onDrawFrame(JNIEnv *jni, jobject object, jfloatArray array,
+Java_com_demo_opengl_provider_CameraInterface_onDrawFrame(JNIEnv *jni, jobject object,
+                                                          jfloatArray array,
                                                           jfloat saturation,
                                                           jfloat contrast,
                                                           jfloat brightness,
@@ -940,9 +923,11 @@ Java_com_demo_opengl_provider_CameraInterface_onDrawFrame(JNIEnv *jni, jobject o
     GLCall(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, arrayBuffer[1]))
 
     GLCall(glEnableVertexAttribArray(positionHandle))
-    GLCall(glVertexAttribPointer(positionHandle, 3, GL_FLOAT, false, 5 * sizeof(float), (GLvoid *) nullptr))
+    GLCall(glVertexAttribPointer(positionHandle, 3, GL_FLOAT, false, 5 * sizeof(float),
+                                 (GLvoid *) nullptr))
     GLCall(glEnableVertexAttribArray(chordsHandle))
-    GLCall(glVertexAttribPointer(chordsHandle, 2, GL_FLOAT, false, 5 * sizeof(float), (GLvoid *) (3 * sizeof(float))))
+    GLCall(glVertexAttribPointer(chordsHandle, 2, GL_FLOAT, false, 5 * sizeof(float),
+                                 (GLvoid *) (3 * sizeof(float))))
 
     GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE))
     GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE))
@@ -952,147 +937,11 @@ Java_com_demo_opengl_provider_CameraInterface_onDrawFrame(JNIEnv *jni, jobject o
     GLCall(glDisableVertexAttribArray(positionHandle))
     GLCall(glDisableVertexAttribArray(chordsHandle))
 
-    float m[] = {
-            1.0f, 0.0f, 0.0f, 0.0f,
-            0.0f, 1.0f, 0.0f, 0.0f,
-            0.0f, 0.0f, 1.0f, 0.0f,
-            0.0f, 0.0f, 0.0f, 1.0f,
-    };
-
-//    ortho(m, 0.0f, 1.0f, 1.0f, 0.0f, 0.0f, 0.0f);
-
-//    GLCall(glUseProgram(faceFilterProgram))
-//    GLCall(glBindBuffer(GL_ARRAY_BUFFER, arrayBuffer[2]))
-//    GLCall(glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(detectionVertices), detectionVertices))
-//    GLCall(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, arrayBuffer[3]))
-//    GLCall(glEnableVertexAttribArray(faceFilterPositionLocation))
-//    GLCall(glVertexAttribPointer(faceFilterPositionLocation, 3, GL_FLOAT, false, 3 * sizeof(float), (GLvoid *) nullptr))
-//    GLCall(glUniformMatrix4fv(faceFilterMvpLocation, 1, false, m))
-//    GLCall(glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr))
-//    GLCall(glDisableVertexAttribArray(faceFilterPositionLocation))
-
-    // Draw Triangle
-    float vertices[] = {
-            -0.5f, -0.5f, 0.0f, 0.0f, 0.0f, // 0
-            -0.5f, 0.5f, 0.0f, 0.0f, 1.0f,// 1
-            0.5f, 0.5f, 0.0f, 1.0f, 1.0f,// 2
-            0.5f, -0.5f, 0.0f, 1.0f, 0.0f// 3
-    };
-
-    unsigned int indices[] = {2, 1, 0, 0, 3, 2};
-
-    float color[] = {1.0f, 0.5f, 0.0f, 0.5f};
-
-    // varying field uses to transfer data between vertex and fragment shader
-    std::string vertexShaderCode = "#version 320 es\n"
-                                   "in vec3 position;\n"
-                                   "in vec2 texCord;\n"
-                                   "in vec4 v_color;\n"
-                                   "uniform mat4 mvp;\n"
-                                   "uniform mat4 model;\n"
-                                   "uniform mat4 projection;\n"
-                                   "uniform mat4 camera;\n"
-                                   "out vec4 f_color;\n"
-                                   "out vec2 f_chord;\n" // Passes to fragment shader
-                                   "void main()\n"
-                                   "{\n"
-                                   " f_color = v_color;\n"
-                                   "f_chord = texCord;\n"
-                                   " gl_Position = projection * camera * model * vec4(position,1.0);\n"
-                                   "}";
-    std::string fragmentShaderCode =
-//            "uniform vec4 color;\n" // Get using uniform location
-            "#version 320 es\n"
-            "precision mediump float;\n"
-            "in vec4 f_color;\n"
-            "in vec2 f_chord;\n"
-            "uniform highp sampler2D tTexture;\n"
-            "out vec4 color;" // Get from vertex shader
-            "void main()\n"
-            "{\n"
-            "color = texture(tTexture,f_chord);\n"
-            //                                " color = color;\n"
-            "}";
-
-    GLCall(GLuint triangleProgram = glCreateProgram())
-    GLCall(Shader shader = Shader(triangleProgram, vertexShaderCode, fragmentShaderCode))
-    GLCall(glLinkProgram(triangleProgram))
-    GLboolean isProgram = glIsProgram(triangleProgram);
-    if (isProgram == GL_FALSE) {
-        __android_log_print(ANDROID_LOG_ERROR, "OpenGL isProgram", "%s", "Failed");
-    }
-    GLint status;
-    glGetProgramiv(triangleProgram, GL_LINK_STATUS, &status);
-    if (status == GL_FALSE) {
-        __android_log_print(ANDROID_LOG_ERROR, "OpenGL program status", "%s", "Failed");
-        GLsizei logLength;
-        GLchar log[1024];
-        glGetProgramInfoLog(program, sizeof(log), &logLength, log);
-        __android_log_print(ANDROID_LOG_ERROR, "OpenGL program status", "%s", log);
-    }
-    GLCall(VertexBuffer vb(vertices, sizeof(vertices)))
-    GLCall(IndexBuffer ib(indices, sizeof(indices)))
-    GLCall(vb.bind())
-    GLCall(ib.bind())
-    GLCall(glUseProgram(triangleProgram))
-    Texture texture1("/storage/emulated/0/sample_tatoo.png", 0, 4,
-                     GL_RGBA);
-    GLCall(GLuint trianglePositionHandle = shader.getAttributeLocation("position"))
-    GLCall(GLuint triangleColorPositionHandle = shader.getAttributeLocation("v_color"))
-    GLCall(GLuint projectionLocation = shader.getUniformLocation("projection"))
-    GLCall(GLuint modelLocation = shader.getUniformLocation("model"))
-    GLCall(GLuint texChordLocation = shader.getAttributeLocation("texCord"))
-    GLCall(GLuint textureLocation = shader.getUniformLocation("tTexture"))
-    CameraView camera;
-    camera.setLocation(triangleProgram, "camera");
-
-    GLCall(shader.vertexAttribPointer(trianglePositionHandle, GL_FLOAT, 3, 5 * sizeof(float),
-                                      (GLvoid *) nullptr))
-    GLCall(shader.enableVertexAttribArray(trianglePositionHandle))
-
-    GLCall(shader.enableVertexAttribArray(texChordLocation))
-    GLCall(shader.vertexAttribPointer(texChordLocation, GL_FLOAT, 2, 5 * sizeof(float), (GLvoid *) (3 * sizeof(float))))
-
-    // don't bind with reference id
-    // Bind with texture slot for which texture is created
-    shader.setUniform1i(textureLocation, 0);
-
-//    GLCall(shader.vertexAttribPointer(triangleColorPositionHandle, GL_FLOAT, 4, 7 * sizeof(float),(GLvoid *) (3 * sizeof(float))))
-//    GLCall(shader.enableVertexAttribArray(triangleColorPositionHandle))
-
-//    GLCall(int colorHandle = shader.getUniformLocation("color"))
-//    GLCall(shader.setUniform4fv(colorHandle,
-//            sizeof(color) / CHORDS_COLOR_PER_VERTEX / BYTES_PER_FLOAT, color))
-
-    isTriangleDrawn = true;
-
-    float *dis = jni->GetFloatArrayElements(distance, nullptr);
-    jni->ReleaseFloatArrayElements(distance, dis, 0);
-
-    float *ot = jni->GetFloatArrayElements(orientation, nullptr);
-
-    camera.changeCamera(ot, dis);
-    glm::mat4 prespective = glm::perspective(glm::radians(45.0f), float(windowWidth) / float(windowHeight), 0.1f, 100.0f);
-    glm::mat4 translate = glm::mat4(1.0f);
-//    translate = glm::rotate(translate,glm::radians(90.0f),glm::vec3(0.0f,1.0f,0.0f));
-    jni->ReleaseFloatArrayElements(orientation, ot, 0);
-
-    GLCall(shader.setUniformMatrix4fv(projectionLocation, 1, glm::value_ptr(prespective)))
-    GLCall(shader.setUniformMatrix4fv(modelLocation, 1, glm::value_ptr(translate)))
-    GLCall(camera.useCamera())
-
-    GLCall(glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr))
-    GLCall(shader.disableVertexAttribPointer(trianglePositionHandle))
-    GLCall(shader.disableVertexAttribPointer(texChordLocation))
-//    GLCall(shader.disableVertexAttribPointer(triangleColorPositionHandle))
-    GLCall(texture1.unBind())
-    GLCall(vb.unBind())
-    GLCall(ib.unBind())
-
-
+    // mesh->Render();
 }
 
-void Java_com_demo_opengl_provider_CameraInterface_changeMode(JNIEnv *jni, jobject object, jint mode) {
+void
+Java_com_demo_opengl_provider_CameraInterface_changeMode(JNIEnv *jni, jobject object, jint mode) {
     if (mode == 0) {
         autoMode();
         applyAwb = 0;
@@ -1101,78 +950,4 @@ void Java_com_demo_opengl_provider_CameraInterface_changeMode(JNIEnv *jni, jobje
         applyAwb = 1;
     }
 }
-
-void Java_com_demo_opengl_provider_CameraInterface_boundingBox(JNIEnv *jni, jobject object, jobject rect) {
-    jclass jclassRect = (*jni).FindClass("android/graphics/Rect");
-    int left = (*jni).GetIntField(rect, (*jni).GetFieldID(jclassRect, "left", "I"));
-    int top = (*jni).GetIntField(rect, (*jni).GetFieldID(jclassRect, "top", "I"));
-    int right = (*jni).GetIntField(rect, (*jni).GetFieldID(jclassRect, "right", "I"));
-    int bottom = (*jni).GetIntField(rect, (*jni).GetFieldID(jclassRect, "bottom", "I"));
-
-    int wLeft, wTop, wRight, wBottom;
-    wLeft = (windowWidth * left) / detectionWidth;
-    wTop = (windowHeight * top) / detectionHeight;
-    wRight = (windowWidth * right) / detectionWidth;
-    wBottom = (windowHeight * bottom) / detectionHeight;
-
-    memset(detectionVertices, 0, sizeof(detectionVertices));
-
-//    detectionVertices[0] = (float) wLeft;
-//    detectionVertices[1] = (float) wTop;
-//    detectionVertices[2] = 1.0;
-//    detectionVertices[3] = (float) wLeft;
-//    detectionVertices[4] = (float) wBottom;
-//    detectionVertices[5] = 1.0;
-//    detectionVertices[6] = (float) wRight;
-//    detectionVertices[7] = (float) wBottom;
-//    detectionVertices[8] = 1.0;
-//    detectionVertices[9] = (float) wRight;
-//    detectionVertices[10] = (float) wTop;
-//    detectionVertices[11] = 1.0;
-
-
-    detectionVertices[0] = 0.0f;
-    detectionVertices[1] = 0.0f;
-    detectionVertices[2] = 0.0f;
-    detectionVertices[3] = 0.0f;
-    detectionVertices[4] = 1.0f;
-    detectionVertices[5] = 0.0f;
-    detectionVertices[6] = 1.0f;
-    detectionVertices[7] = 1.0f;
-    detectionVertices[8] = 0.0f;
-    detectionVertices[9] = 1.0f;
-    detectionVertices[10] = 0.0f;
-    detectionVertices[11] = 0.0f;
-
-//    detectionVertices[0] = 500.0f;
-//    detectionVertices[1] = 500.0f;
-//    detectionVertices[2] = 1.0f;
-//    detectionVertices[3] = 700.0f;
-//    detectionVertices[4] = 500.0f;
-//    detectionVertices[5] = 1.0f;
-//    detectionVertices[6] = 700.0f;
-//    detectionVertices[7] = 700.0f;
-//    detectionVertices[8] = 1.0f;
-//    detectionVertices[9] = 500.0f;
-//    detectionVertices[10] = 700.0f;
-//    detectionVertices[11] = 1.0f;
-
-//    detectionVertices[0] = 0.0f;
-//    detectionVertices[1] = (float) windowHeight;
-//    detectionVertices[2] = 1.0f;
-//    detectionVertices[3] = (float) windowWidth;
-//    detectionVertices[4] = (float) windowHeight;
-//    detectionVertices[5] = 1.0f;
-//    detectionVertices[6] = (float) windowWidth;
-//    detectionVertices[7] = 0.0f;
-//    detectionVertices[8] = 1.0f;
-//    detectionVertices[9] = 0.0f;
-//    detectionVertices[10] = 0.0f;
-//    detectionVertices[11] = 1.0f;
-
-//    for (int i = 0; i < sizeof(detectionVertices) / sizeof(float); i++) {
-//        __android_log_print(ANDROID_LOG_ERROR, "Bounding box", "position: %d, x,y:%f", i, detectionVertices[i]);
-//    }
-}
-
 }

@@ -1,0 +1,2 @@
+/Users/roshan/Library/Android/sdk/ndk/23.1.7779620/toolchains/llvm/prebuilt/darwin-x86_64/bin/llvm-ar qc libandroid_jniiosystem.a CMakeFiles/android_jniiosystem.dir/AndroidJNIIOSystem.cpp.o CMakeFiles/android_jniiosystem.dir/BundledAssetIOSystem.cpp.o
+/Users/roshan/Library/Android/sdk/ndk/23.1.7779620/toolchains/llvm/prebuilt/darwin-x86_64/bin/llvm-ranlib libandroid_jniiosystem.a

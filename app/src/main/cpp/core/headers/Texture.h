@@ -2,6 +2,7 @@
 // Created by Roshan on 12-12-2020.
 //
 #include <string>
+#include <GLES2/gl2.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -12,6 +13,8 @@ extern "C" {
 
 class Texture {
 private:
+    std::string texturePath;
+    GLenum textureTarget;
     unsigned int mReferenceID;
     unsigned int slot;
     int width = 0;
@@ -21,6 +24,10 @@ private:
 
 public:
     Texture(std::string path, int slot, int channel, int type);
+
+    Texture(GLenum textureTarget, const std::string path);
+
+    bool load();
 
     void bind();
 

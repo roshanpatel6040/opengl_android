@@ -32,6 +32,9 @@ add_library(cameraView
         STATIC
         src/main/cpp/core/CameraView.cpp)
 
+add_library(mesh
+        STATIC
+        src/main/cpp/core/Mesh.cpp)
 
 include_directories(src/main/cpp/stb_image)
 include_directories(src/main/cpp/glm)
@@ -40,6 +43,20 @@ include_directories(src/main/cpp/core/headers)
 find_library(log-lib log)
 find_library(camera-lib camera2ndk)
 find_library(media-lib mediandk)
+#find_library(shared-lib libc++_shared.so)
+
+set(ENABLE_BOOST_WORKAROUND ON)
+set(BUILD_STATIC_LIB ON)
+set(BUILD_ASSIMP_TOOLS  ON)
+set(ASSIMP_BUILD_STATIC_LIB ON)
+
+add_subdirectory(assimp)
+include_directories(assimp/include)
+include_directories(assimp/build_android/include)
+set(ASSIMP_LIB assimp)
+
+add_library(JNIO STATIC IMPORTED)
+set_target_properties(JNIO PROPERTIES IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/assimp/build_android/port/AndroidJNI/libandroid_jniiosystem.a)
 
 target_link_libraries( # Specifies the target library.
         cameraCpp
@@ -50,6 +67,9 @@ target_link_libraries( # Specifies the target library.
         texture
         android
         cameraView
+        mesh
+        ${ASSIMP_LIB}
+        JNIO
         ${log-lib}
         ${camera-lib}
         ${media-lib}
@@ -71,4 +91,5 @@ target_link_libraries( # Specifies the target library.
         EGL
         GLESv2
         GLESv3
+        ${ASSIMP_LIB}
         )
