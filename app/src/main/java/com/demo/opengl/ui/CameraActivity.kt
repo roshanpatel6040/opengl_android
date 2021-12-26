@@ -60,14 +60,21 @@ class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener, Vie
     }
 
     private fun initView() {
+        getExternalFilesDir(null)?.deleteRecursively()
         val file = File(getExternalFilesDir(null), "models")
         if (!file.exists()) {
             file.mkdirs()
-            val fis = FileOutputStream(File(file, "pyramid.obj"))
-            val inputStream = assets.open("models/pyramid.obj")
+            val fis = FileOutputStream(File(file, "LEGO_Man.obj"))
+            val inputStream = assets.open("models/lego/LEGO_Man.obj")
             fis.write(inputStream.readBytes())
             fis.close()
             inputStream.close()
+
+            val fisMtl = FileOutputStream(File(file, "LEGO_Man.mtl"))
+            val inputStreamMtl = assets.open("models/lego/LEGO_Man.mtl")
+            fisMtl.write(inputStreamMtl.readBytes())
+            fisMtl.close()
+            inputStreamMtl.close()
         }
         setup()
         CameraInterface.initialize()

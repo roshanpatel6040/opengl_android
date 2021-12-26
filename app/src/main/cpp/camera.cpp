@@ -112,6 +112,9 @@ JavaVM *javaVM = nullptr;
 jclass activityClass;
 jobject activityObj;
 
+GLuint meshProgram;
+Shader *meshShader;
+CameraView *meshCamera;
 Mesh *mesh;
 
 const string vertexShaderCode = "#version 320 es\n"
@@ -747,6 +750,8 @@ void Java_com_demo_opengl_provider_CameraInterface_onSurfaceCreated(JNIEnv *jni,
                                                                     jint height) {
 
     GLCall(glClearColor(0, 0, 0, 1))
+    // GLCall(glEnable(GL_DEPTH_TEST))
+    // GLCall(glEnable(GL_CULL_FACE))
 
     textureID = textureId;
     cameraWidth = width;
@@ -770,7 +775,6 @@ void Java_com_demo_opengl_provider_CameraInterface_onSurfaceCreated(JNIEnv *jni,
     __android_log_print(ANDROID_LOG_ERROR, "OpenGL version", "%s", glGetString(GL_VERSION));
     __android_log_print(ANDROID_LOG_ERROR, "OpenGL shader version", "%s",
                         glGetString(GL_SHADING_LANGUAGE_VERSION));
-//    GLCall(glEnable(GL_DEPTH_TEST))
     GLCall(glEnable(GL_BLEND))
     glBlendFunc(GL_SRC_ALPHA, GL_ONE);
     GLCall(program = glCreateProgram())
@@ -841,9 +845,44 @@ void Java_com_demo_opengl_provider_CameraInterface_onSurfaceCreated(JNIEnv *jni,
 
     startCamera(jni, object);
 
+    // create Program using mesh(Assimp)
+    GLCall(meshProgram = glCreateProgram())
+    AAsset *vertAsset = AAssetManager_open(assetManager, "shaders/basic_object.vert",
+                                           AASSET_MODE_BUFFER);
+    size_t vertLength = AAsset_getLength(vertAsset);
+    char *vertexSource = (char *) malloc((sizeof(char) * vertLength));
+    AAsset_read(vertAsset, vertexSource, vertLength);
+    AAsset_close(vertAsset);
+    // vertexSource += '\0';
+    AAsset *fragAsset = AAssetManager_open(assetManager, "shaders/basic_object.frag",
+                                           AASSET_MODE_BUFFER);
+    size_t fragLength = AAsset_getLength(fragAsset);
+    char *fragSource = (char *) malloc((sizeof(char) * fragLength));
+    AAsset_read(fragAsset, fragSource, fragLength);
+    AAsset_close(fragAsset);
+    GLCall(meshShader = new Shader(meshProgram, vertexSource, fragSource))
+    GLCall(glLinkProgram(meshProgram))
+
+    GLboolean isMeshProgram = glIsProgram(meshProgram);
+    if (isMeshProgram == GL_FALSE) {
+        __android_log_print(ANDROID_LOG_ERROR, "OpenGL isProgram", "%s", "Failed");
+    }
+    GLint meshStatus;
+    glGetProgramiv(meshProgram, GL_LINK_STATUS, &meshStatus);
+    if (meshStatus == GL_FALSE) {
+        __android_log_print(ANDROID_LOG_ERROR, "OpenGL program status", "%s", "Failed");
+        GLsizei logLength;
+        GLchar log[1024];
+        glGetProgramInfoLog(program, sizeof(log), &logLength, log);
+        __android_log_print(ANDROID_LOG_ERROR, "OpenGL program status", "%s", log);
+    }
+
     mesh = new Mesh(assetManager);
-    bool isLoaded = mesh->LoadMesh("pyramid.obj");
+    bool isLoaded = mesh->LoadMesh("LEGO_Man.obj");
     __android_log_print(ANDROID_LOG_ERROR, "Model loading", "loaded %d", isLoaded);
+
+    meshCamera = new CameraView();
+    GLCall(meshCamera->setLocation(meshProgram, "camera"))
 }
 
 void Java_com_demo_opengl_provider_CameraInterface_onSurfaceChanged(JNIEnv *jni,
@@ -937,6 +976,45 @@ Java_com_demo_opengl_provider_CameraInterface_onDrawFrame(JNIEnv *jni, jobject o
     GLCall(glDisableVertexAttribArray(positionHandle))
     GLCall(glDisableVertexAttribArray(chordsHandle))
 
+    // Mesh program
+    GLCall(glUseProgram(meshProgram))
+    glm::mat4 projection = glm::perspective(45.0f,
+                                            (float) windowWidth / (float) windowHeight,
+                                            0.1f,
+                                            100.0f);
+    glm::mat4 translate = glm::translate(glm::mat4(1.0), glm::vec3(0.0f, 0.0f, 0.0f));
+    glm::mat4 rotation = glm::rotate(glm::mat4(1.0f), glm::radians(0.0f),
+                                     glm::vec3(1.0f, 1.0f, 1.0f));
+    glm::mat4 model = translate * rotation;
+    GLCall(GLuint projectionLocation = meshShader->getUniformLocation("projection"))
+    GLCall(GLuint modelLocation = meshShader->getUniformLocation("model"))
+    meshCamera->useCamera();
+    GLCall(GLuint meshTextureLocation = meshShader->getUniformLocation("texture"))
+    GLCall(meshShader->setUniformMatrix4fv(projectionLocation, 1, glm::value_ptr(projection)))
+    GLCall(meshShader->setUniformMatrix4fv(modelLocation, 1, glm::value_ptr(model)))
+
+    for (unsigned int i = 0; i < mesh->m_Entries.size(); i++) {
+        GLCall(glBindBuffer(GL_ARRAY_BUFFER, mesh->m_Entries[i].VB))
+        GLCall(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh->m_Entries[i].IB))
+
+        GLCall(glEnableVertexAttribArray(0))
+        GLCall(glEnableVertexAttribArray(1))
+
+        GLCall(glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (const GLvoid *) 0))
+        GLCall(glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (const GLvoid *) 12))
+
+        const unsigned int MaterialIndex = mesh->m_Entries[i].MaterialIndex;
+        if (MaterialIndex < mesh->m_Textures.size() && mesh->m_Textures[MaterialIndex]) {
+            mesh->m_Textures[MaterialIndex]->bind();
+            GLCall(meshShader->setUniform1i(meshTextureLocation,
+                                            mesh->m_Textures[MaterialIndex]->getSlot()))
+        }
+        GLCall(glDrawElements(GL_TRIANGLES, mesh->m_Entries[i].NumIndices, GL_UNSIGNED_INT,
+                              nullptr))
+
+        GLCall(glDisableVertexAttribArray(0))
+        GLCall(glDisableVertexAttribArray(1))
+    }
     // mesh->Render();
 }
 

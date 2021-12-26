@@ -451,5 +451,34 @@ public:
     }
 };
 
+struct BaseLight {
+    glm::vec3 Color;
+    float AmbientIntensity;
+    float DiffuseIntensity;
+};
+
+struct DirectionalLight {
+    BaseLight Base;
+    glm::vec3 Direction;
+};
+
+struct Attenuation {
+    float Constant;
+    float Linear;
+    float Exp;
+};
+
+struct PointLight {
+    BaseLight Base;
+    glm::vec3 Position;
+    Attenuation Atten;
+};
+
+struct SpotLight {
+    PointLight Base;
+    glm::vec3 Direction;
+    float Cutoff;
+};
+
 #endif
 

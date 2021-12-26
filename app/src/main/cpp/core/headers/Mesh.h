@@ -47,18 +47,6 @@ public:
 
     void Render();
 
-private:
-
-    AAssetManager *assetManager;
-
-    bool InitFromScene(const aiScene *pScene, const std::string &Filename);
-
-    void InitMesh(unsigned int Index, const aiMesh *paiMesh);
-
-    bool InitMaterials(const aiScene *pScene, const std::string &Filename);
-
-    void Clear();
-
 #define INVALID_MATERIAL 0xFFFFFFFF
 
     struct MeshEntry {
@@ -77,6 +65,18 @@ private:
 
     std::vector<MeshEntry> m_Entries;
     std::vector<Texture *> m_Textures;
+
+private:
+
+    AAssetManager *assetManager;
+
+    bool InitFromScene(const aiScene *pScene, const std::string &Filename);
+
+    void InitMesh(unsigned int Index, const aiMesh *paiMesh);
+
+    bool InitMaterials(const aiScene *pScene, const std::string &Filename);
+
+    void Clear();
 };
 
 #endif //OPENGL_MESH_H

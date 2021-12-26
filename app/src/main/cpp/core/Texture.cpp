@@ -56,7 +56,10 @@ Texture::Texture(std::string path, int slot, int channel, int type) : slot(slot)
 }
 
 Texture::Texture(GLenum textureTarget, const std::string path) : textureTarget(textureTarget),
-                                                                 texturePath(path) {}
+                                                                 texturePath(path),
+                                                                 slot(2) {
+    __android_log_print(ANDROID_LOG_ERROR, "Texture", "Slots alot");
+}
 
 bool Texture::load() {
     stbi_set_flip_vertically_on_load(1);
@@ -67,6 +70,7 @@ bool Texture::load() {
     }
 
     printf("Width %d, height %d, bpp %d\n", width, height, bpp);
+    GLCall(glActiveTexture(GL_TEXTURE0 + getSlot()))
     glGenTextures(1, &mReferenceID);
     glBindTexture(textureTarget, mReferenceID);
     if (textureTarget == GL_TEXTURE_2D) {
@@ -101,6 +105,7 @@ bool Texture::load() {
 }
 
 void Texture::bind() {
+    GLCall(glActiveTexture(GL_TEXTURE0 + getSlot()))
     GLCall(glBindTexture(textureTarget, mReferenceID))
 }
 
