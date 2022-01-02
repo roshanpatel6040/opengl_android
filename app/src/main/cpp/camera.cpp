@@ -117,6 +117,12 @@ Shader *meshShader;
 CameraView *meshCamera;
 Mesh *mesh;
 
+GLuint videoProgram;
+Shader *videoShader;
+VertexBuffer *videoVertexBuffer;
+IndexBuffer *videoIndexBuffer;
+GLuint videoTextureId;
+
 const string vertexShaderCode = "#version 320 es\n"
                                 "in vec3 position;\n"
                                 "in vec2 texChords;\n"
@@ -742,9 +748,104 @@ void Java_com_demo_opengl_provider_CameraInterface_capture(JNIEnv *jni, jobject 
     captureImage();
 }
 
+void createVideoProgram() {
+
+    const std::string vert = "#version 320 es\n"
+                             "in vec3 position;\n"
+                             "in vec2 texChords;\n"
+                             "uniform mat4 u_MVP;"
+                             "uniform mat4 texMatrix;\n"
+                             "out vec2 v_Chord;\n"
+                             "void main()\n"
+                             "{\n"
+                             "    v_Chord = (texMatrix * vec4(texChords.x, texChords.y, 0.0, 1.0)).xy;\n"
+                             "    gl_Position = u_MVP * vec4(position, 1.0); \n"
+                             "}";
+
+    const std::string frag = "#version 320 es\n"
+                             "#extension GL_OES_EGL_image_external_essl3:require\n"
+                             "precision highp float;\n"
+                             "in lowp vec2 v_Chord;\n"
+                             "uniform samplerExternalOES tex;"
+                             "out vec4 fragColor;\n"
+                             "void main()\n"
+                             "{\n"
+                             "    vec4 c = texture(tex, v_Chord);\n"
+                             "    float rbAverage = c.r * 0.5 + c.b * 0.5;\n"
+                             "    float gDelta = c.g - rbAverage;\n"
+                             "    c.a = 1.0 - smoothstep(0.0, 0.25, gDelta);\n"
+                             "    c.a = c.a * c.a * c.a;\n"
+                             "    fragColor = c;\n"
+                             "}";
+
+    // Video Program
+    GLCall(videoProgram = glCreateProgram())
+    GLCall(videoShader = new Shader(videoProgram, vert, frag))
+    GLCall(glLinkProgram(videoProgram))
+
+    GLboolean isVideoProgram = glIsProgram(videoProgram);
+    if (isVideoProgram == GL_FALSE) {
+        __android_log_print(ANDROID_LOG_ERROR, "OpenGL isProgram", "%s", "Failed");
+    }
+    GLint videoStatus;
+    glGetProgramiv(meshProgram, GL_LINK_STATUS, &videoStatus);
+    if (videoStatus == GL_FALSE) {
+        __android_log_print(ANDROID_LOG_ERROR, "OpenGL program status", "%s", "Failed");
+        GLsizei logLength;
+        GLchar log[1024];
+        glGetProgramInfoLog(program, sizeof(log), &logLength, log);
+        __android_log_print(ANDROID_LOG_ERROR, "OpenGL program status", "%s", log);
+    }
+    float vertices[] = {
+            -1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
+            -1.0, 1.0f, 0.0f, 0.0f, 1.0f,
+            1.0f, 1.0f, 0.0f, 1.0f, 1.0f,
+            1.0f, -1.0f, 0.0f, 1.0f, 0.0f
+    };
+
+    unsigned int indices[] = {
+            2, 1, 0, 0, 3, 2
+    };
+    videoVertexBuffer = new VertexBuffer(vertices, sizeof(vertices));
+    videoIndexBuffer = new IndexBuffer(indices, sizeof(indices));
+}
+
+void drawVideoProgram(float *mvp, float *texMatrix) {
+    GLCall(glUseProgram(videoProgram))
+
+    GLCall(glUniformMatrix4fv(videoShader->getUniformLocation("u_MVP"), 1, false, mvp))
+    GLCall(glUniformMatrix4fv(videoShader->getUniformLocation("texMatrix"), 1, false, texMatrix))
+
+    GLCall(glActiveTexture(GL_TEXTURE1))
+    GLCall(glBindTexture(GL_TEXTURE_EXTERNAL_OES, videoTextureId))
+    GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR))
+    GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR))
+    GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE))
+    GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE))
+
+    GLCall(videoShader->setUniform1i(videoShader->getUniformLocation("tex"), 1))
+
+    GLCall(videoVertexBuffer->bind())
+    GLCall(videoIndexBuffer->bind())
+
+    GLCall(GLuint position = videoShader->getAttributeLocation("position"))
+    GLCall(GLuint chords = videoShader->getAttributeLocation("texChords"))
+    GLCall(glEnableVertexAttribArray(position))
+    GLCall(glVertexAttribPointer(position, 3, GL_FLOAT, false, 5 * sizeof(float),
+                                 (GLvoid *) nullptr))
+    GLCall(glEnableVertexAttribArray(chords))
+    GLCall(glVertexAttribPointer(chords, 2, GL_FLOAT, false, 5 * sizeof(float),
+                                 (GLvoid *) (3 * sizeof(float))))
+
+    GLCall(glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr))
+
+    GLCall(glDisableVertexAttribArray(position))
+    GLCall(glDisableVertexAttribArray(chords))
+}
+
 void Java_com_demo_opengl_provider_CameraInterface_onSurfaceCreated(JNIEnv *jni,
                                                                     jobject object,
-                                                                    jint textureId,
+                                                                    jintArray textureId,
                                                                     jobject surface,
                                                                     jint width,
                                                                     jint height) {
@@ -752,8 +853,13 @@ void Java_com_demo_opengl_provider_CameraInterface_onSurfaceCreated(JNIEnv *jni,
     GLCall(glClearColor(0, 0, 0, 1))
     // GLCall(glEnable(GL_DEPTH_TEST))
     // GLCall(glEnable(GL_CULL_FACE))
+    GLCall(glEnable(GL_BLEND))
+    GLCall(glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA))
 
-    textureID = textureId;
+    int *ids = jni->GetIntArrayElements(textureId, nullptr);
+
+    textureID = ids[0];
+    videoTextureId = ids[1];
     cameraWidth = width;
     cameraHeight = height;
 
@@ -775,8 +881,6 @@ void Java_com_demo_opengl_provider_CameraInterface_onSurfaceCreated(JNIEnv *jni,
     __android_log_print(ANDROID_LOG_ERROR, "OpenGL version", "%s", glGetString(GL_VERSION));
     __android_log_print(ANDROID_LOG_ERROR, "OpenGL shader version", "%s",
                         glGetString(GL_SHADING_LANGUAGE_VERSION));
-    GLCall(glEnable(GL_BLEND))
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE);
     GLCall(program = glCreateProgram())
     GLCall(Shader shader = Shader(program, vertexShaderCode, fragmentShaderCode))
 
@@ -798,7 +902,7 @@ void Java_com_demo_opengl_provider_CameraInterface_onSurfaceCreated(JNIEnv *jni,
         __android_log_print(ANDROID_LOG_ERROR, "OpenGL program status", "%s", log);
     }
 
-    GLCall(glActiveTexture(GL_TEXTURE1))
+    GLCall(glActiveTexture(GL_TEXTURE2))
     GLCall(glGenTextures(1, &textureLutReferenceID))
     GLCall(glBindTexture(GL_TEXTURE_2D, textureLutReferenceID))
     GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR))
@@ -806,6 +910,7 @@ void Java_com_demo_opengl_provider_CameraInterface_onSurfaceCreated(JNIEnv *jni,
     GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE))
     GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE))
 
+    // Lut texture
     int tw;
     int th;
     int channels;
@@ -813,9 +918,7 @@ void Java_com_demo_opengl_provider_CameraInterface_onSurfaceCreated(JNIEnv *jni,
     std::string path = "/storage/emulated/0/default.png";
     stbi_set_flip_vertically_on_load(true);
     buffer = stbi_load(path.c_str(), &tw, &th, &channels, 4);
-
     GLCall(glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, tw, th, 0, GL_RGBA, GL_UNSIGNED_BYTE, buffer))
-
     if (buffer) {
         stbi_image_free(buffer);
     } else {
@@ -850,16 +953,17 @@ void Java_com_demo_opengl_provider_CameraInterface_onSurfaceCreated(JNIEnv *jni,
     AAsset *vertAsset = AAssetManager_open(assetManager, "shaders/basic_object.vert",
                                            AASSET_MODE_BUFFER);
     size_t vertLength = AAsset_getLength(vertAsset);
-    char *vertexSource = (char *) malloc((sizeof(char) * vertLength));
+    char *vertexSource = (char *) malloc((sizeof(char) * vertLength) + 1);
     AAsset_read(vertAsset, vertexSource, vertLength);
     AAsset_close(vertAsset);
-    // vertexSource += '\0';
+    vertexSource += '\0';
     AAsset *fragAsset = AAssetManager_open(assetManager, "shaders/basic_object.frag",
                                            AASSET_MODE_BUFFER);
     size_t fragLength = AAsset_getLength(fragAsset);
-    char *fragSource = (char *) malloc((sizeof(char) * fragLength));
+    char *fragSource = (char *) malloc((sizeof(char) * fragLength) + 1);
     AAsset_read(fragAsset, fragSource, fragLength);
     AAsset_close(fragAsset);
+    fragSource += '\0';
     GLCall(meshShader = new Shader(meshProgram, vertexSource, fragSource))
     GLCall(glLinkProgram(meshProgram))
 
@@ -883,6 +987,8 @@ void Java_com_demo_opengl_provider_CameraInterface_onSurfaceCreated(JNIEnv *jni,
 
     meshCamera = new CameraView();
     GLCall(meshCamera->setLocation(meshProgram, "camera"))
+
+    createVideoProgram();
 }
 
 void Java_com_demo_opengl_provider_CameraInterface_onSurfaceChanged(JNIEnv *jni,
@@ -901,6 +1007,7 @@ void Java_com_demo_opengl_provider_CameraInterface_onSurfaceChanged(JNIEnv *jni,
 void
 Java_com_demo_opengl_provider_CameraInterface_onDrawFrame(JNIEnv *jni, jobject object,
                                                           jfloatArray array,
+                                                          jfloatArray videoArray,
                                                           jfloat saturation,
                                                           jfloat contrast,
                                                           jfloat brightness,
@@ -943,13 +1050,13 @@ Java_com_demo_opengl_provider_CameraInterface_onDrawFrame(JNIEnv *jni, jobject o
 
     GLCall(glUniform1i(textureLocation, 0))
 
-    GLCall(glActiveTexture(GL_TEXTURE1))
+    GLCall(glActiveTexture(GL_TEXTURE2))
     GLCall(glBindTexture(GL_TEXTURE_2D, textureLutReferenceID))
     GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR))
     GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR))
     GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE))
     GLCall(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE))
-    GLCall(glUniform1i(lutTextureLocation, 1))
+    GLCall(glUniform1i(lutTextureLocation, 2))
 
     GLCall(glUniform1f(saturationLocation, saturation))
     GLCall(glUniform1f(contrastLocation, contrast))
@@ -999,6 +1106,7 @@ Java_com_demo_opengl_provider_CameraInterface_onDrawFrame(JNIEnv *jni, jobject o
 
         GLCall(glEnableVertexAttribArray(0))
         GLCall(glEnableVertexAttribArray(1))
+        GLCall(glEnableVertexAttribArray(2))
 
         GLCall(glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (const GLvoid *) 0))
         GLCall(glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (const GLvoid *) 12))
@@ -1014,8 +1122,13 @@ Java_com_demo_opengl_provider_CameraInterface_onDrawFrame(JNIEnv *jni, jobject o
 
         GLCall(glDisableVertexAttribArray(0))
         GLCall(glDisableVertexAttribArray(1))
+        GLCall(glDisableVertexAttribArray(2))
     }
     // mesh->Render();
+
+    float *videoMvp = jni->GetFloatArrayElements(videoArray, nullptr);
+    drawVideoProgram(mvp, videoMvp);
+    jni->ReleaseFloatArrayElements(videoArray, videoMvp, 0);
 }
 
 void

@@ -7,6 +7,7 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.media.MediaPlayer
 import android.opengl.GLES11Ext
 import android.opengl.GLES20
 import android.opengl.GLSurfaceView
@@ -15,6 +16,7 @@ import android.os.Environment
 import android.util.Log
 import android.view.Surface
 import android.view.WindowManager
+import com.demo.opengl.R
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -36,6 +38,7 @@ class CameraRenderer(var context: Context) : GLSurfaceView.Renderer {
     }
 
     private lateinit var windowManager: WindowManager
+    private lateinit var mediaPlayer: MediaPlayer
 
     private val rotationMatrix = FloatArray(16)
     private val remappedRotationMatrix = FloatArray(16)
@@ -167,14 +170,43 @@ class CameraRenderer(var context: Context) : GLSurfaceView.Renderer {
     }
 
     init {
-        val sensorManager: SensorManager = context.applicationContext.getSystemService(Context.SENSOR_SERVICE) as SensorManager
-        windowManager = context.applicationContext.getSystemService(Context.WINDOW_SERVICE) as WindowManager
-        sensorManager.registerListener(listener, sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR), 1000)
-        sensorManager.registerListener(listener, sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION), 1)
-        sensorManager.registerListener(listener, sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER), 1)
-        sensorManager.registerListener(listener, sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE), 1)
-        sensorManager.registerListener(listener, sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD), 1)
-        sensorManager.registerListener(listener, sensorManager.getDefaultSensor(Sensor.TYPE_GRAVITY), 1)
+        val sensorManager: SensorManager =
+            context.applicationContext.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+        windowManager =
+            context.applicationContext.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+        sensorManager.registerListener(
+            listener,
+            sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR),
+            1000
+        )
+        sensorManager.registerListener(
+            listener,
+            sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION),
+            1
+        )
+        sensorManager.registerListener(
+            listener,
+            sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER),
+            1
+        )
+        sensorManager.registerListener(
+            listener,
+            sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE),
+            1
+        )
+        sensorManager.registerListener(
+            listener,
+            sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD),
+            1
+        )
+        sensorManager.registerListener(
+            listener,
+            sensorManager.getDefaultSensor(Sensor.TYPE_GRAVITY),
+            1
+        )
+
+        mediaPlayer = MediaPlayer.create(context, R.raw.coin)
+        mediaPlayer.isLooping = true
     }
 
     private var captureListener: CaptureListener? = null
@@ -182,10 +214,15 @@ class CameraRenderer(var context: Context) : GLSurfaceView.Renderer {
     private var capture = false
 
     private lateinit var surfaceTexture: SurfaceTexture
+    private lateinit var videoSurfaceTexture: SurfaceTexture
     private val texMatrix = FloatArray(16)
+    private val videoTexMatrix = FloatArray(16)
 
     @Volatile
     private var frameAvailable: Boolean = false
+
+    @Volatile
+    private var videoFrameAvailable: Boolean = false
 
     private val lock = Object()
     private val captureLock = Object()
@@ -230,7 +267,7 @@ class CameraRenderer(var context: Context) : GLSurfaceView.Renderer {
         pixelBuffer.rewind()
 
         var bos: BufferedOutputStream? = null
-        val directory = File(Environment.getExternalStorageDirectory(), "Pro")
+        val directory = File(context.getExternalFilesDir(null), "Pro")
         if (!directory.exists()) {
             directory.mkdirs()
         }
@@ -270,8 +307,24 @@ class CameraRenderer(var context: Context) : GLSurfaceView.Renderer {
                 surfaceTexture.getTransformMatrix(texMatrix)
                 frameAvailable = false
             }
+
+            if (videoFrameAvailable) {
+                videoSurfaceTexture.updateTexImage()
+            videoSurfaceTexture.getTransformMatrix(videoTexMatrix)
+                videoFrameAvailable = false
+            }
         }
-        CameraInterface.onDrawFrame(texMatrix, saturation, contrast, brightness, highlight, shadow, orientations, distance)
+        CameraInterface.onDrawFrame(
+            texMatrix,
+            videoTexMatrix,
+            saturation,
+            contrast,
+            brightness,
+            highlight,
+            shadow,
+            orientations,
+            distance
+        )
 
         if (capture) {
             captureImage(false)
@@ -304,9 +357,10 @@ class CameraRenderer(var context: Context) : GLSurfaceView.Renderer {
 
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
         // Prepare texture and surface
-        val textureBuffer = IntArray(1)
-        GLES20.glGenTextures(1, textureBuffer, 0)
+        val textureBuffer = IntArray(2)
+        GLES20.glGenTextures(2, textureBuffer, 0)
         GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, textureBuffer[0])
+        GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, textureBuffer[1])
 
         surfaceTexture = SurfaceTexture(textureBuffer[0])
         surfaceTexture.setDefaultBufferSize(cameraWidth, cameraHeight)
@@ -318,7 +372,19 @@ class CameraRenderer(var context: Context) : GLSurfaceView.Renderer {
 
         val surface = Surface(surfaceTexture)
 
-        CameraInterface.onSurfaceCreated(textureBuffer[0], surface, cameraWidth, cameraHeight)
+        videoSurfaceTexture = SurfaceTexture(textureBuffer[1])
+        videoSurfaceTexture.setDefaultBufferSize(mediaPlayer.videoWidth, mediaPlayer.videoHeight)
+        videoSurfaceTexture.setOnFrameAvailableListener {
+            synchronized(lock) {
+                videoFrameAvailable = true
+            }
+        }
+
+        val videoSurface = Surface(videoSurfaceTexture)
+        mediaPlayer.setSurface(videoSurface)
+        mediaPlayer.start()
+
+        CameraInterface.onSurfaceCreated(textureBuffer, surface, cameraWidth, cameraHeight)
     }
 
     fun changeSaturation(value: Float) {

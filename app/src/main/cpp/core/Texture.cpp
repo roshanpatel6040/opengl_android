@@ -57,7 +57,7 @@ Texture::Texture(std::string path, int slot, int channel, int type) : slot(slot)
 
 Texture::Texture(GLenum textureTarget, const std::string path) : textureTarget(textureTarget),
                                                                  texturePath(path),
-                                                                 slot(2) {
+                                                                 slot(3) {
     __android_log_print(ANDROID_LOG_ERROR, "Texture", "Slots alot");
 }
 
