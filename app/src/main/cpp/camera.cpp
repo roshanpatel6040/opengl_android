@@ -8,6 +8,7 @@
 #include <jni.h>
 #include <cstdlib>
 #include <dirent.h>
+#include <map>
 
 #include <EGL/egl.h>
 #include <GLES/gl.h>
@@ -502,7 +503,7 @@ void createEglContext(JNIEnv *env, jobject surface) {
                     EGL_RED_SIZE, 8,
                     EGL_GREEN_SIZE, 8,
                     EGL_BLUE_SIZE, 8,
-                    EGL_DEPTH_SIZE, 16,
+                    EGL_DEPTH_SIZE, 24,
                     EGL_STENCIL_SIZE, 8,
                     EGL_NONE};
 
@@ -851,8 +852,10 @@ void Java_com_demo_opengl_provider_CameraInterface_onSurfaceCreated(JNIEnv *jni,
                                                                     jint height) {
 
     GLCall(glClearColor(0, 0, 0, 1))
-    // GLCall(glEnable(GL_DEPTH_TEST))
-    // GLCall(glEnable(GL_CULL_FACE))
+//    GLCall(glEnable(GL_CULL_FACE))
+//    GLCall(glFrontFace(GL_CW))
+//    GLCall(glCullFace(GL_BACK))
+//    GLCall(glEnable(GL_DEPTH_TEST))
     GLCall(glEnable(GL_BLEND))
     GLCall(glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA))
 
@@ -950,14 +953,14 @@ void Java_com_demo_opengl_provider_CameraInterface_onSurfaceCreated(JNIEnv *jni,
 
     // create Program using mesh(Assimp)
     GLCall(meshProgram = glCreateProgram())
-    AAsset *vertAsset = AAssetManager_open(assetManager, "shaders/basic_object.vert",
+    AAsset *vertAsset = AAssetManager_open(assetManager, "shaders/anim_object.vert",
                                            AASSET_MODE_BUFFER);
     size_t vertLength = AAsset_getLength(vertAsset);
     char *vertexSource = (char *) malloc((sizeof(char) * vertLength) + 1);
     AAsset_read(vertAsset, vertexSource, vertLength);
     AAsset_close(vertAsset);
     vertexSource += '\0';
-    AAsset *fragAsset = AAssetManager_open(assetManager, "shaders/basic_object.frag",
+    AAsset *fragAsset = AAssetManager_open(assetManager, "shaders/anim_object.frag",
                                            AASSET_MODE_BUFFER);
     size_t fragLength = AAsset_getLength(fragAsset);
     char *fragSource = (char *) malloc((sizeof(char) * fragLength) + 1);
@@ -982,13 +985,13 @@ void Java_com_demo_opengl_provider_CameraInterface_onSurfaceCreated(JNIEnv *jni,
     }
 
     mesh = new Mesh(assetManager);
-    bool isLoaded = mesh->LoadMesh("LEGO_Man.obj");
+    bool isLoaded = mesh->LoadMesh("boblampclean.md5mesh");
     __android_log_print(ANDROID_LOG_ERROR, "Model loading", "loaded %d", isLoaded);
 
     meshCamera = new CameraView();
     GLCall(meshCamera->setLocation(meshProgram, "camera"))
 
-    createVideoProgram();
+    // createVideoProgram();
 }
 
 void Java_com_demo_opengl_provider_CameraInterface_onSurfaceChanged(JNIEnv *jni,
@@ -1089,45 +1092,70 @@ Java_com_demo_opengl_provider_CameraInterface_onDrawFrame(JNIEnv *jni, jobject o
                                             (float) windowWidth / (float) windowHeight,
                                             0.1f,
                                             100.0f);
-    glm::mat4 translate = glm::translate(glm::mat4(1.0), glm::vec3(0.0f, 0.0f, 0.0f));
-    glm::mat4 rotation = glm::rotate(glm::mat4(1.0f), glm::radians(0.0f),
-                                     glm::vec3(1.0f, 1.0f, 1.0f));
-    glm::mat4 model = translate * rotation;
+    glm::mat4 translate = glm::translate(glm::mat4(1.0), glm::vec3(0.0f, 0.0f, 50.0f));
+    glm::mat4 rotation = glm::rotate(glm::mat4(1.0f), glm::radians(120.0f),
+                                     glm::vec3(0.0f, 1.0f, 1.0f));
+    glm::mat4 scale = glm::scale(glm::mat4(1.0), glm::vec3(0.2, 0.2, 0.2));
+    glm::mat4 model = translate * rotation * scale;
     GLCall(GLuint projectionLocation = meshShader->getUniformLocation("projection"))
     GLCall(GLuint modelLocation = meshShader->getUniformLocation("model"))
     meshCamera->useCamera();
-    GLCall(GLuint meshTextureLocation = meshShader->getUniformLocation("texture"))
+
+    std::vector<Matrix4f> boneMatrix;
+    mesh->GetBoneTransforms(mesh->getAnimationSecond(), boneMatrix);
+
+    GLuint mBoneLocation[100];
+    for (unsigned int i = 0; i < ARRAY_SIZE_IN_ELEMENTS(mBoneLocation); i++) {
+        char Name[128];
+        memset(Name, 0, sizeof(Name));
+        snprintf(Name, sizeof(Name), "gBones[%d]", i);
+        GLCall(mBoneLocation[i] = meshShader->getUniformLocation(Name))
+    }
+
+    for (int i = 0; i < boneMatrix.size(); ++i) {
+        if (i >= 100) {
+            break;
+        }
+        Matrix4f matrix = boneMatrix[i];
+        GLCall(glUniformMatrix4fv(mBoneLocation[i], 1, GL_TRUE, (const GLfloat *) matrix))
+    }
+
+    // GLCall(GLuint meshTextureLocation = meshShader->getUniformLocation("texture"))
     GLCall(meshShader->setUniformMatrix4fv(projectionLocation, 1, glm::value_ptr(projection)))
     GLCall(meshShader->setUniformMatrix4fv(modelLocation, 1, glm::value_ptr(model)))
 
-    for (unsigned int i = 0; i < mesh->m_Entries.size(); i++) {
-        GLCall(glBindBuffer(GL_ARRAY_BUFFER, mesh->m_Entries[i].VB))
-        GLCall(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh->m_Entries[i].IB))
+    Vector3f localPos = mesh->GetWorldTransform().WorldPosToLocalPos(meshCamera->getCameraPos());
+    GLCall(GLuint localCameraPosLocation = meshShader->getUniformLocation("gCameraLocalPos"))
+    GLCall(glUniform3f(localCameraPosLocation, localPos.x, localPos.y, localPos.z))
 
-        GLCall(glEnableVertexAttribArray(0))
-        GLCall(glEnableVertexAttribArray(1))
-        GLCall(glEnableVertexAttribArray(2))
-
-        GLCall(glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (const GLvoid *) 0))
-        GLCall(glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (const GLvoid *) 12))
-
-        const unsigned int MaterialIndex = mesh->m_Entries[i].MaterialIndex;
-        if (MaterialIndex < mesh->m_Textures.size() && mesh->m_Textures[MaterialIndex]) {
-            mesh->m_Textures[MaterialIndex]->bind();
-            GLCall(meshShader->setUniform1i(meshTextureLocation,
-                                            mesh->m_Textures[MaterialIndex]->getSlot()))
-        }
-        GLCall(glDrawElements(GL_TRIANGLES, mesh->m_Entries[i].NumIndices, GL_UNSIGNED_INT,
-                              nullptr))
-
-        GLCall(glDisableVertexAttribArray(0))
-        GLCall(glDisableVertexAttribArray(1))
-        GLCall(glDisableVertexAttribArray(2))
-    }
-    // mesh->Render();
+//    for (unsigned int i = 0; i < mesh->m_Entries.size(); i++) {
+//        GLCall(glBindBuffer(GL_ARRAY_BUFFER, mesh->m_Entries[i].VB))
+//        GLCall(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh->m_Entries[i].IB))
+//
+//        GLCall(glEnableVertexAttribArray(0))
+//        GLCall(glEnableVertexAttribArray(1))
+//        GLCall(glEnableVertexAttribArray(2))
+//
+//        GLCall(glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (const GLvoid *) 0))
+//        GLCall(glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (const GLvoid *) 12))
+//
+//        const unsigned int MaterialIndex = mesh->m_Entries[i].MaterialIndex;
+//        if (MaterialIndex < mesh->m_Textures.size() && mesh->m_Textures[MaterialIndex]) {
+//            mesh->m_Textures[MaterialIndex]->bind();
+//            GLCall(meshShader->setUniform1i(meshTextureLocation,
+//                                            mesh->m_Textures[MaterialIndex]->getSlot()))
+//        }
+//        GLCall(glDrawElements(GL_TRIANGLES, mesh->m_Entries[i].NumIndices, GL_UNSIGNED_INT,
+//                              nullptr))
+//
+//        GLCall(glDisableVertexAttribArray(0))
+//        GLCall(glDisableVertexAttribArray(1))
+//        GLCall(glDisableVertexAttribArray(2))
+//    }
+    mesh->Render(meshProgram);
 
     float *videoMvp = jni->GetFloatArrayElements(videoArray, nullptr);
-    drawVideoProgram(mvp, videoMvp);
+    // drawVideoProgram(mvp, videoMvp);
     jni->ReleaseFloatArrayElements(videoArray, videoMvp, 0);
 }
 

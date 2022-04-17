@@ -12,6 +12,7 @@
 #include "string.h"
 
 #include "stdlib.h"
+#include "MathHelper.h"
 
 class CameraView {
 
@@ -25,6 +26,8 @@ public:
     void useCamera();
 
     GLuint getLocation();
+
+    Vector3f getCameraPos() const;
 
     ~CameraView();
 

@@ -6,7 +6,7 @@
 #include "Renderer.h"
 
 CameraView::CameraView() {
-    cameraPos = glm::vec3(0.0f, 0.0f, -12.0f);
+    cameraPos = glm::vec3(0.0f, 0.0f, -3.0f);
     cameraFront = glm::vec3(0.0f, 0.0f, 0.0f);
     cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
     camera = glm::lookAt(cameraPos, cameraFront, cameraUp);
@@ -40,6 +40,10 @@ void CameraView::setLocation(GLuint location, const char *name) {
 
 GLuint CameraView::getLocation() {
     return mCameraLocation;
+}
+
+Vector3f CameraView::getCameraPos() const {
+    return Vector3f(cameraPos.x, cameraPos.y, cameraPos.z);
 }
 
 CameraView::~CameraView() = default;

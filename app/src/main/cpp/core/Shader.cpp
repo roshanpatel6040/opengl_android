@@ -76,7 +76,7 @@ void Shader::setUniform4fv(unsigned int location, int size, const float *value) 
 }
 
 void Shader::setUniformMatrix4fv(unsigned int location, int size, float *value) {
-    glUniformMatrix4fv(location, size, false, value);
+    glUniformMatrix4fv(location, size, GL_FALSE, value);
 }
 
 void Shader::setUniform1i(unsigned int location, unsigned int textureId) {

@@ -27,6 +27,8 @@ public:
 
     Texture(GLenum textureTarget, const std::string path);
 
+    Texture(GLenum textureTarget, const std::string path, int slot);
+
     bool load();
 
     void bind();

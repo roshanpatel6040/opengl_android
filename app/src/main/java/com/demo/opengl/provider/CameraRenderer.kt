@@ -380,9 +380,9 @@ class CameraRenderer(var context: Context) : GLSurfaceView.Renderer {
             }
         }
 
-        val videoSurface = Surface(videoSurfaceTexture)
-        mediaPlayer.setSurface(videoSurface)
-        mediaPlayer.start()
+        // val videoSurface = Surface(videoSurfaceTexture)
+        // mediaPlayer.setSurface(videoSurface)
+        // mediaPlayer.start()
 
         CameraInterface.onSurfaceCreated(textureBuffer, surface, cameraWidth, cameraHeight)
     }

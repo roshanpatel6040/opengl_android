@@ -36,6 +36,14 @@ add_library(mesh
         STATIC
         src/main/cpp/core/Mesh.cpp)
 
+add_library(worldTransform
+        STATIC
+        src/main/cpp/core/WorldTransform.cpp)
+
+add_library(math
+        STATIC
+        src/main/cpp/core/MathHelper.cpp)
+
 include_directories(src/main/cpp/stb_image)
 include_directories(src/main/cpp/glm)
 include_directories(src/main/cpp/core/headers)
@@ -68,6 +76,8 @@ target_link_libraries( # Specifies the target library.
         android
         cameraView
         mesh
+        worldTransform
+        math
         ${ASSIMP_LIB}
         JNIO
         ${log-lib}

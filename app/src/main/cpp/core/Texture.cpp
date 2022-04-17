@@ -61,15 +61,22 @@ Texture::Texture(GLenum textureTarget, const std::string path) : textureTarget(t
     __android_log_print(ANDROID_LOG_ERROR, "Texture", "Slots alot");
 }
 
+Texture::Texture(GLenum textureTarget, const std::string path, int slot) : textureTarget(
+        textureTarget),
+                                                                           texturePath(path),
+                                                                           slot(slot) {
+    __android_log_print(ANDROID_LOG_ERROR, "Texture", "Slots alot");
+}
+
 bool Texture::load() {
     stbi_set_flip_vertically_on_load(1);
     allocationBuffer = stbi_load(texturePath.c_str(), &width, &height, &bpp, 0);
     if (!allocationBuffer) {
-        printf("Can't load texture from '%s' - %s\n", texturePath.c_str(), stbi_failure_reason());
-        exit(0);
+        __android_log_print(ANDROID_LOG_ERROR, "Texture", "cannot load texture %s",
+                            stbi_failure_reason());
     }
-
-    printf("Width %d, height %d, bpp %d\n", width, height, bpp);
+    __android_log_print(ANDROID_LOG_DEBUG, "Texture", "Width: %d, height: %d, bpp:%d",
+                        width, height, bpp);
     GLCall(glActiveTexture(GL_TEXTURE0 + getSlot()))
     glGenTextures(1, &mReferenceID);
     glBindTexture(textureTarget, mReferenceID);
@@ -92,6 +99,8 @@ bool Texture::load() {
         }
     } else {
         printf("Support for texture target %x is not implemented\n", textureTarget);
+        __android_log_print(ANDROID_LOG_ERROR, "mesh", "No support for texture target %d",
+                            textureTarget);
     }
     glTexParameterf(textureTarget, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameterf(textureTarget, GL_TEXTURE_MAG_FILTER, GL_LINEAR);

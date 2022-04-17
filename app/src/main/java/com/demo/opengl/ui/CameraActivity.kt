@@ -8,6 +8,8 @@ import android.view.WindowManager
 import android.widget.SeekBar
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.net.toUri
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
 import androidx.core.view.isVisible
 import com.demo.opengl.R
 import com.demo.opengl.provider.CameraInterface
@@ -15,6 +17,7 @@ import com.demo.opengl.provider.CameraModeImpl
 import com.demo.opengl.provider.CaptureListener
 import com.demo.opengl.provider.ProviderConst
 import com.demo.opengl.utils.Constants
+import com.demo.opengl.utils.Utils
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.snackbar.Snackbar
 import com.google.mlkit.vision.common.InputImage
@@ -55,27 +58,37 @@ class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener, Vie
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_camera)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-//        previewWindow.setFlags(WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS, WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS)
         initView()
     }
 
     private fun initView() {
         getExternalFilesDir(null)?.deleteRecursively()
-        val file = File(getExternalFilesDir(null), "models")
-        if (!file.exists()) {
-            file.mkdirs()
-            val fis = FileOutputStream(File(file, "LEGO_Man.obj"))
-            val inputStream = assets.open("models/lego/LEGO_Man.obj")
-            fis.write(inputStream.readBytes())
-            fis.close()
-            inputStream.close()
-
-            val fisMtl = FileOutputStream(File(file, "LEGO_Man.mtl"))
-            val inputStreamMtl = assets.open("models/lego/LEGO_Man.mtl")
-            fisMtl.write(inputStreamMtl.readBytes())
-            fisMtl.close()
-            inputStreamMtl.close()
-        }
+        Utils.copyAssets(this, "models/boblampclean")
+//        Utils.copyAssets(this,"models/man")
+//        val file = File(getExternalFilesDir(null), "models")
+//        if (!file.exists()) {
+//            file.mkdirs()
+//            val fis = FileOutputStream(File(file, "LEGO_Man.obj"))
+//            val inputStream = assets.open("models/lego/LEGO_Man.obj")
+//            fis.write(inputStream.readBytes())
+//            fis.close()
+//            inputStream.close()
+//
+//            val fisMtl = FileOutputStream(File(file, "LEGO_Man.mtl"))
+//            val inputStreamMtl = assets.open("models/lego/LEGO_Man.mtl")
+//            fisMtl.write(inputStreamMtl.readBytes())
+//            fisMtl.close()
+//            inputStreamMtl.close()
+//            val handgunDirectory = File(file, "handgun")
+//            handgunDirectory.mkdirs()
+//            val textureDirectory = File(handgunDirectory,"textures")
+//            textureDirectory.mkdirs()
+//            storeModels(file.absolutePath, "handgun.fbx", "models/handgun/handgun.fbx")
+//            storeModels(textureDirectory.absolutePath, "handgun_C.jpg", "models/handgun/handgun_C.jpg")
+//            storeModels(textureDirectory.absolutePath, "handgun_Fire.png", "models/handgun/handgun_Fire.png")
+//            storeModels(textureDirectory.absolutePath, "handgun_N.jpg", "models/handgun/handgun_N.jpg")
+//            storeModels(textureDirectory.absolutePath, "handgun_S.jpg", "models/handgun/handgun_S.jpg")
+//        }
         setup()
         CameraInterface.initialize()
         surface.getRenderer().setCaptureListener(this)
@@ -241,4 +254,14 @@ class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener, Vie
     }
 
     external fun setup()
+
+    fun storeModels(directory: String, fileName: String, assetFileName: String) {
+        val file = File(directory, fileName)
+        file.createNewFile()
+        val fbx = FileOutputStream(file)
+        val fbxStream = assets.open(assetFileName)
+        fbx.write(fbxStream.readBytes())
+        fbx.close()
+        fbxStream.close()
+    }
 }
