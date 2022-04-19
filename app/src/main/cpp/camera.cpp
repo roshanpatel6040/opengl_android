@@ -851,13 +851,13 @@ void Java_com_demo_opengl_provider_CameraInterface_onSurfaceCreated(JNIEnv *jni,
                                                                     jint width,
                                                                     jint height) {
 
-    GLCall(glClearColor(0, 0, 0, 1))
-//    GLCall(glEnable(GL_CULL_FACE))
-//    GLCall(glFrontFace(GL_CW))
+    GLCall(glClearColor(0, 0, 0, 0))
+    GLCall(glEnable(GL_CULL_FACE))
 //    GLCall(glCullFace(GL_BACK))
-//    GLCall(glEnable(GL_DEPTH_TEST))
-    GLCall(glEnable(GL_BLEND))
-    GLCall(glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA))
+//    GLCall(glFrontFace(GL_CW))
+    // GLCall(glEnable(GL_DEPTH_TEST))
+     GLCall(glEnable(GL_BLEND))
+     // GLCall(glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA))
 
     int *ids = jni->GetIntArrayElements(textureId, nullptr);
 
@@ -1002,9 +1002,9 @@ void Java_com_demo_opengl_provider_CameraInterface_onSurfaceChanged(JNIEnv *jni,
 
     windowWidth = width;
     windowHeight = height;
-    ANativeWindow_acquire(previewWindow);
-    ANativeWindow_setBuffersGeometry(previewWindow, windowWidth, windowHeight,
-                                     WINDOW_FORMAT_RGBA_8888);
+//    ANativeWindow_acquire(previewWindow);
+//    ANativeWindow_setBuffersGeometry(previewWindow, windowWidth, windowHeight,
+//                                     WINDOW_FORMAT_RGBA_8888);
 
 }
 void
@@ -1091,12 +1091,14 @@ Java_com_demo_opengl_provider_CameraInterface_onDrawFrame(JNIEnv *jni, jobject o
     glm::mat4 projection = glm::perspective(45.0f,
                                             (float) windowWidth / (float) windowHeight,
                                             0.1f,
-                                            100.0f);
-    glm::mat4 translate = glm::translate(glm::mat4(1.0), glm::vec3(0.0f, 0.0f, 50.0f));
-    glm::mat4 rotation = glm::rotate(glm::mat4(1.0f), glm::radians(120.0f),
-                                     glm::vec3(0.0f, 1.0f, 1.0f));
+                                            1000.0f);
+    glm::mat4 translate = glm::translate(glm::mat4(1.0), glm::vec3(0.0f, 0.0f, 30.0f));
+    glm::mat4 rotationX = glm::rotate(glm::mat4(1.0f), glm::radians(270.0f),
+                                      glm::vec3(1.0f, 0.0f, 0.0f));
+    glm::mat4 rotationY = glm::rotate(glm::mat4(1.0f), glm::radians(180.0f),
+                                      glm::vec3(0.0f, 0.0f, 1.0f));
     glm::mat4 scale = glm::scale(glm::mat4(1.0), glm::vec3(0.2, 0.2, 0.2));
-    glm::mat4 model = translate * rotation * scale;
+    glm::mat4 model = translate * rotationX * rotationY * scale;
     GLCall(GLuint projectionLocation = meshShader->getUniformLocation("projection"))
     GLCall(GLuint modelLocation = meshShader->getUniformLocation("model"))
     meshCamera->useCamera();

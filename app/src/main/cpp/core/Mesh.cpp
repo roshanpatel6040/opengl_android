@@ -135,22 +135,18 @@ void Mesh::InitSingleMesh(uint MeshIndex, const aiMesh *paiMesh) {
     // Populate the vertex attribute vectors
     for (unsigned int i = 0; i < paiMesh->mNumVertices; i++) {
         const aiVector3D &pPos = paiMesh->mVertices[i];
-        Vector3f vertices(pPos.x, pPos.y, pPos.z);
-        m_Positions.push_back(vertices);
+        m_Positions.emplace_back(pPos.x, pPos.y, pPos.z);
 
         if (paiMesh->mNormals) {
             const aiVector3D &pNormal = paiMesh->mNormals[i];
-            Vector3f normal(pNormal.x, pNormal.y, pNormal.z);
-            m_Normals.push_back(normal);
+            m_Normals.emplace_back((pNormal.x, pNormal.y, pNormal.z));
         } else {
             aiVector3D Normal(0.0f, 1.0f, 0.0f);
-            Vector3f normal(Normal.x, Normal.y, Normal.z);
-            m_Normals.push_back(normal);
+            m_Normals.push_back(Vector3f(Normal.x, Normal.y, Normal.z));
         }
         const aiVector3D &pTexCoord = paiMesh->HasTextureCoords(0) ? paiMesh->mTextureCoords[0][i]
                                                                    : Zero3D;
-        Vector2f texChords(pTexCoord.x, pTexCoord.y);
-        m_TexCoords.push_back(texChords);
+        m_TexCoords.emplace_back(pTexCoord.x, pTexCoord.y);
     }
 
     LoadMeshBones(MeshIndex, paiMesh);
@@ -353,31 +349,39 @@ void Mesh::LoadColors(const aiMaterial *pMaterial, int index) {
 
 void Mesh::PopulateBuffers() {
     GLCall(glBindBuffer(GL_ARRAY_BUFFER, m_Buffers[POS_VB]))
-    GLCall(glBufferData(GL_ARRAY_BUFFER, m_Positions.size() * sizeof(m_Positions[0]),&m_Positions[0],GL_STATIC_DRAW))
+    GLCall(glBufferData(GL_ARRAY_BUFFER, m_Positions.size() * sizeof(m_Positions[0]),
+                        &m_Positions[0], GL_STATIC_DRAW))
     GLCall(glEnableVertexAttribArray(POSITION_LOCATION))
-    GLCall(glVertexAttribPointer(POSITION_LOCATION, 3, GL_FLOAT, GL_FALSE, 0,nullptr))
+    GLCall(glVertexAttribPointer(POSITION_LOCATION, 3, GL_FLOAT, GL_FALSE, 0, nullptr))
 
     GLCall(glBindBuffer(GL_ARRAY_BUFFER, m_Buffers[TEXCOORD_VB]))
-    GLCall(glBufferData(GL_ARRAY_BUFFER, m_TexCoords.size() * sizeof(m_TexCoords[0]),&m_TexCoords[0],GL_STATIC_DRAW))
+    GLCall(glBufferData(GL_ARRAY_BUFFER, m_TexCoords.size() * sizeof(m_TexCoords[0]),
+                        &m_TexCoords[0], GL_STATIC_DRAW))
     GLCall(glEnableVertexAttribArray(TEX_COORD_LOCATION))
     GLCall(glVertexAttribPointer(TEX_COORD_LOCATION, 2, GL_FLOAT, GL_FALSE, 0, nullptr))
 
     GLCall(glBindBuffer(GL_ARRAY_BUFFER, m_Buffers[NORMAL_VB]))
-    GLCall(glBufferData(GL_ARRAY_BUFFER, m_Normals.size() * sizeof(m_Normals[0]), &m_Normals[0], GL_STATIC_DRAW))
+    GLCall(glBufferData(GL_ARRAY_BUFFER, m_Normals.size() * sizeof(m_Normals[0]), &m_Normals[0],
+                        GL_STATIC_DRAW))
     GLCall(glEnableVertexAttribArray(NORMAL_LOCATION))
     GLCall(glVertexAttribPointer(NORMAL_LOCATION, 3, GL_FLOAT, GL_FALSE, 0, nullptr))
 
     GLCall(glBindBuffer(GL_ARRAY_BUFFER, m_Buffers[BONE_VB]))
-    GLCall(glBufferData(GL_ARRAY_BUFFER, m_Bones.size() * sizeof(m_Bones[0]), &m_Bones[0],GL_STATIC_DRAW))
+    GLCall(glBufferData(GL_ARRAY_BUFFER, m_Bones.size() * sizeof(m_Bones[0]), &m_Bones[0],
+                        GL_STATIC_DRAW))
 
     GLCall(glEnableVertexAttribArray(BONE_ID_LOCATION))
-    GLCall(glVertexAttribIPointer(BONE_ID_LOCATION, MAX_NUM_BONES_PER_VERTEX, GL_INT,sizeof(VertexBoneData), nullptr))
+    GLCall(glVertexAttribIPointer(BONE_ID_LOCATION, MAX_NUM_BONES_PER_VERTEX, GL_INT,
+                                  sizeof(VertexBoneData), nullptr))
 
     GLCall(glEnableVertexAttribArray(BONE_WEIGHT_LOCATION))
-    GLCall(glVertexAttribPointer(BONE_WEIGHT_LOCATION, MAX_NUM_BONES_PER_VERTEX, GL_FLOAT, GL_FALSE,sizeof(VertexBoneData),(const GLvoid *) (MAX_NUM_BONES_PER_VERTEX * sizeof(int32_t))))
+    GLCall(glVertexAttribPointer(BONE_WEIGHT_LOCATION, MAX_NUM_BONES_PER_VERTEX, GL_FLOAT, GL_FALSE,
+                                 sizeof(VertexBoneData),
+                                 (const GLvoid *) (MAX_NUM_BONES_PER_VERTEX * sizeof(int32_t))))
 
     GLCall(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_Buffers[INDEX_BUFFER]))
-    GLCall(glBufferData(GL_ELEMENT_ARRAY_BUFFER, m_Indices.size() * sizeof(m_Indices[0]), &m_Indices[0],GL_STATIC_DRAW))
+    GLCall(glBufferData(GL_ELEMENT_ARRAY_BUFFER, m_Indices.size() * sizeof(m_Indices[0]),
+                        &m_Indices[0], GL_STATIC_DRAW))
 
     __android_log_print(ANDROID_LOG_ERROR, "Mesh", "Buffers populated");
 }
@@ -385,15 +389,21 @@ void Mesh::PopulateBuffers() {
 void Mesh::Render(GLuint program) {
     GLCall(glBindVertexArray(m_VAO))
 
-    for (auto &m_Meshe : m_Meshes) {
-
+    for (int i = 0; i < m_Meshes.size(); i++) {
+        Mesh::BasicMeshEntry &m_Meshe = m_Meshes[i];
         unsigned int MaterialIndex = m_Meshe.MaterialIndex;
+
+        assert(MaterialIndex < m_Materials.size());
+
+//        __android_log_print(ANDROID_LOG_ERROR, "Mesh", "TotalMeshes: %d", m_Meshes.size());
+//        __android_log_print(ANDROID_LOG_ERROR, "Mesh", "TotalMaterials: %d", m_Materials.size());
 
         if (m_Materials[MaterialIndex].pDiffuse) {
             Texture *texture = m_Materials[MaterialIndex].pDiffuse;
             GLCall(texture->bind())
             GLCall(GLuint diffuseLocation = glGetUniformLocation(program, "gSampler"))
             GLCall(glUniform1i(diffuseLocation, texture->getSlot()))
+//            __android_log_print(ANDROID_LOG_ERROR, "Mesh", "Diffuse");
         }
         if (m_Materials[MaterialIndex].pSpecularExponent) {
             Texture *texture = m_Materials[MaterialIndex].pSpecularExponent;
@@ -401,6 +411,7 @@ void Mesh::Render(GLuint program) {
                            "gSamplerSpecularExponent"))
             GLCall(texture->bind())
             GLCall(glUniform1i(specularLocation, texture->getSlot()))
+//            __android_log_print(ANDROID_LOG_ERROR, "Mesh", "Specular");
         }
 
         GLCall(glDrawElementsBaseVertex(GL_TRIANGLES, m_Meshe.NumIndices, GL_UNSIGNED_INT,

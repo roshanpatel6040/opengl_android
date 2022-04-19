@@ -54,10 +54,10 @@ struct Material
     vec3 SpecularColor;
 };
 
-const float intensity = 0.6;
+const float intensity = 0.4;
 const vec3 color = vec3(1.0, 1.0, 1.0);
 const BaseLight base = BaseLight(color, intensity, intensity);
-const vec3 direction = vec3(1.0, 0.0, 0.0);
+const vec3 direction = vec3(1.0, 1.0, 0.0);
 const DirectionalLight gDirectionalLight = DirectionalLight(base, direction);
 const Material gMaterial = Material(color, color, color);
 //uniform int gNumPointLights;
@@ -143,4 +143,5 @@ void main(){
     //        TotalLight += CalcSpotLight(gSpotLights[i], Normal);
     //    }
     FragColor = texture(gSampler, TexCoord0.xy) * TotalLight;
+//    FragColor = vec4(vec3(gl_FragCoord.z),1.0);
 }

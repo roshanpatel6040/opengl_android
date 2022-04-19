@@ -69,7 +69,7 @@ Texture::Texture(GLenum textureTarget, const std::string path, int slot) : textu
 }
 
 bool Texture::load() {
-    stbi_set_flip_vertically_on_load(1);
+    stbi_set_flip_vertically_on_load(false);
     allocationBuffer = stbi_load(texturePath.c_str(), &width, &height, &bpp, 0);
     if (!allocationBuffer) {
         __android_log_print(ANDROID_LOG_ERROR, "Texture", "cannot load texture %s",
