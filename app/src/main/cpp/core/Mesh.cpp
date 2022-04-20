@@ -51,15 +51,14 @@ bool Mesh::LoadMesh(const std::string &Filename) {
 
 
     bool Ret = false;
-    Assimp::AndroidJNIIOSystem *ioSystem = new Assimp::AndroidJNIIOSystem(
-            "storage/emulated/0/Android/data/com.demo.opengl/files/models", assetManager);
-    Assimp::Importer *Importer = new Assimp::Importer();
-    bool isFileExist = ioSystem->Exists(Filename.c_str());
-    __android_log_print(ANDROID_LOG_DEBUG, "Model loading", "File exits: %d",
-                        isFileExist);
-    Importer->SetIOHandler(ioSystem);
-//    aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_FlipUVs | aiProcess_JoinIdenticalVertices
-    pScene = Importer->ReadFile(Filename.c_str(), ASSIMP_LOAD_FLAGS);
+    // auto *ioSystem = new Assimp::AndroidJNIIOSystem("storage/emulated/0/Android/data/com.demo.opengl/files/models", assetManager);
+    auto *Importer = new Assimp::Importer();
+    // bool isFileExist = ioSystem->Exists(Filename.c_str());
+    // __android_log_print(ANDROID_LOG_DEBUG, "Model loading", "File exits: %d", isFileExist);
+    // Importer->SetIOHandler(ioSystem);
+    pScene = Importer->ReadFile(
+            std::string("storage/emulated/0/Android/data/com.demo.opengl/files/models/") +
+            Filename.c_str(), ASSIMP_LOAD_FLAGS);
 
     if (pScene) {
         m_GlobalInverseTransform = pScene->mRootNode->mTransformation;

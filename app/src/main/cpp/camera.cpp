@@ -856,8 +856,9 @@ void Java_com_demo_opengl_provider_CameraInterface_onSurfaceCreated(JNIEnv *jni,
 //    GLCall(glCullFace(GL_BACK))
 //    GLCall(glFrontFace(GL_CW))
     // GLCall(glEnable(GL_DEPTH_TEST))
-     GLCall(glEnable(GL_BLEND))
-     // GLCall(glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA))
+    // Enable blend when required and disable it again
+    GLCall(glEnable(GL_BLEND))
+    // GLCall(glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA))
 
     int *ids = jni->GetIntArrayElements(textureId, nullptr);
 

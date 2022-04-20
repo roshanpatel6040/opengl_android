@@ -205,8 +205,9 @@ class CameraRenderer(var context: Context) : GLSurfaceView.Renderer {
             1
         )
 
-        mediaPlayer = MediaPlayer.create(context, R.raw.coin)
-        mediaPlayer.isLooping = true
+        // TODO Add green screen video in raw directory and replace file
+        // mediaPlayer = MediaPlayer.create(context, R.raw.coin)
+        // mediaPlayer.isLooping = true
     }
 
     private var captureListener: CaptureListener? = null
@@ -310,7 +311,7 @@ class CameraRenderer(var context: Context) : GLSurfaceView.Renderer {
 
             if (videoFrameAvailable) {
                 videoSurfaceTexture.updateTexImage()
-            videoSurfaceTexture.getTransformMatrix(videoTexMatrix)
+                videoSurfaceTexture.getTransformMatrix(videoTexMatrix)
                 videoFrameAvailable = false
             }
         }
@@ -372,14 +373,14 @@ class CameraRenderer(var context: Context) : GLSurfaceView.Renderer {
 
         val surface = Surface(surfaceTexture)
 
-        videoSurfaceTexture = SurfaceTexture(textureBuffer[1])
-        videoSurfaceTexture.setDefaultBufferSize(mediaPlayer.videoWidth, mediaPlayer.videoHeight)
-        videoSurfaceTexture.setOnFrameAvailableListener {
-            synchronized(lock) {
-                videoFrameAvailable = true
-            }
-        }
-
+        // video player texture and surface
+//        videoSurfaceTexture = SurfaceTexture(textureBuffer[1])
+//        videoSurfaceTexture.setDefaultBufferSize(mediaPlayer.videoWidth, mediaPlayer.videoHeight)
+//        videoSurfaceTexture.setOnFrameAvailableListener {
+//            synchronized(lock) {
+//                videoFrameAvailable = true
+//            }
+//        }
         // val videoSurface = Surface(videoSurfaceTexture)
         // mediaPlayer.setSurface(videoSurface)
         // mediaPlayer.start()

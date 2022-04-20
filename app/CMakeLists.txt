@@ -63,8 +63,8 @@ include_directories(assimp/include)
 include_directories(assimp/build_android/include)
 set(ASSIMP_LIB assimp)
 
-add_library(JNIO STATIC IMPORTED)
-set_target_properties(JNIO PROPERTIES IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/assimp/build_android/port/AndroidJNI/libandroid_jniiosystem.a)
+#add_library(JNIO STATIC IMPORTED)
+#set_target_properties(JNIO PROPERTIES IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/assimp/build_android/port/AndroidJNI/libandroid_jniiosystem.a)
 
 target_link_libraries( # Specifies the target library.
         cameraCpp
@@ -79,7 +79,6 @@ target_link_libraries( # Specifies the target library.
         worldTransform
         math
         ${ASSIMP_LIB}
-        JNIO
         ${log-lib}
         ${camera-lib}
         ${media-lib}
