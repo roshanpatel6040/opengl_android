@@ -671,7 +671,7 @@ void startCamera(JNIEnv *env, jobject object) {
     Camera(ACameraDevice_createCaptureSession(cameraDevice, previewSessionOutputContainer,
                                               &sessionCallbacks, &session))
 
-    detectionMode();
+    autoMode();
 }
 
 void destroy() {
@@ -1034,7 +1034,7 @@ Java_com_demo_opengl_provider_CameraInterface_onDrawFrame(JNIEnv *jni, jobject o
             0.0f, 0.0f, 0.0f, 1.0f,
     };
     if (windowWidth < windowHeight) // portrait
-        ortho(mvp, -1.0f, 1.0f, -1.0, 1.0, -1.0f, 1.0f);
+        ortho(mvp, -0.8, 0.8, -1.0, 1.0, -1.0f, 1.0f);
     else // landscape
         ortho(mvp, -aspect, aspect, -1.0f, 1.0f, -1.0f, 1.0f);
 

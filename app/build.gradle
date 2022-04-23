@@ -3,6 +3,12 @@ apply plugin: 'kotlin-android'
 apply plugin: 'kotlin-android-extensions'
 apply plugin: 'kotlin-kapt'
 
+// Downloaded arcore .so files directory
+def arcore_libpath = "${buildDir}/arcore-native"
+
+// Create new configuration
+configurations { natives }
+
 android {
     compileSdkVersion 30
     buildToolsVersion "30.0.2"
@@ -17,8 +23,9 @@ android {
 
         externalNativeBuild {
             cmake {
-                arguments '-DANDROID_ARM_NEON=true', '-DANDROID_PLATFORM=android-24', '-DANDROID_TOOLCHAIN=clang'
-                abiFilters 'x86', 'x86_64', 'armeabi-v7a', 'arm64-v8a'
+                arguments '-DANDROID_ARM_NEON=true', '-DANDROID_PLATFORM=android-24', '-DANDROID_TOOLCHAIN=clang',
+                        "-DARCORE_LIBPATH=${arcore_libpath}/jni"
+                abiFilters 'x86', 'x86_64', 'arm64-v8a', 'armeabi-v7a'
                 cppFlags "-std=c++17", "-fexceptions", "-frtti"
             }
         }
@@ -61,5 +68,34 @@ dependencies {
     implementation 'com.google.android.material:material:1.2.1'
 
     implementation 'com.google.mlkit:face-detection:16.0.3'
+    implementation 'com.google.ar:core:1.30.0'
+    // new configuration to copy arcore .so into build folder
+    // Uncomment to re-download so
+    // Uncomment if arcore version is upgraded here
+    // natives 'com.google.ar:core:1.30.0'
+}
 
+
+/**
+ * Copy .so files from arcore into build folder
+ * */
+task extractNativeLibraries() {
+    // Always extract, this insures the native libs are updated if the version changes.
+    outputs.upToDateWhen { false }
+    doFirst {
+        configurations.natives.files.each { f ->
+            copy {
+                from zipTree(f)
+                into arcore_libpath
+                include "jni/**/*"
+            }
+        }
+    }
+}
+
+tasks.whenTaskAdded {
+    task ->
+        if ((task.name.contains("external") || task.name.contains("CMake")) && !task.name.contains("Clean")) {
+            task.dependsOn(extractNativeLibraries)
+        }
 }

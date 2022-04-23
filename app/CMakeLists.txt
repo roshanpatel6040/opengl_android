@@ -4,6 +4,8 @@ add_library(opengl
         SHARED
         src/main/cpp/opengl.cpp)
 
+add_library(arcoreImpl SHARED src/main/cpp/arcoreimpl.cpp)
+
 add_library(cameraCpp
         SHARED
         src/main/cpp/camera.cpp)
@@ -44,6 +46,10 @@ add_library(math
         STATIC
         src/main/cpp/core/MathHelper.cpp)
 
+add_library(ar STATIC src/main/cpp/core/ar.cpp)
+
+add_library(bgRenderer STATIC src/main/cpp/core/background_renderer.cpp)
+
 include_directories(src/main/cpp/stb_image)
 include_directories(src/main/cpp/glm)
 include_directories(src/main/cpp/core/headers)
@@ -65,6 +71,33 @@ set(ASSIMP_LIB assimp)
 
 #add_library(JNIO STATIC IMPORTED)
 #set_target_properties(JNIO PROPERTIES IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/assimp/build_android/port/AndroidJNI/libandroid_jniiosystem.a)
+
+add_library(arcore SHARED IMPORTED)
+set_target_properties(arcore PROPERTIES IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/src/main/jni/${ANDROID_ABI}/libarcore_sdk_c.so
+        INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_CURRENT_SOURCE_DIR}/arcore/include)
+include_directories(src/main/arcore/include)
+
+target_link_libraries( # Specifies the target library.
+        arcoreImpl
+        renderer
+        vertexBuffer
+        indexBuffer
+        shader
+        texture
+        android
+        cameraView
+        mesh
+        worldTransform
+        math
+        arcore
+        ar
+        bgRenderer
+        ${ASSIMP_LIB}
+        ${log-lib}
+        EGL
+        GLESv2
+        GLESv3
+        )
 
 target_link_libraries( # Specifies the target library.
         cameraCpp

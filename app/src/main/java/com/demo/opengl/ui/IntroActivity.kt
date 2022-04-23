@@ -51,7 +51,7 @@ class IntroActivity : AppCompatActivity() {
 
         txt_launching.setOnClickListener {
             handler.removeCallbacksAndMessages(null)
-            val intent = Intent(this, MainActivity::class.java)
+            val intent = Intent(this, CameraActivity::class.java)
             startActivity(intent)
             finishAffinity()
         }
@@ -66,7 +66,7 @@ class IntroActivity : AppCompatActivity() {
         cl_permission.isVisible = false
         txt_launching.isVisible = true
         handler.postDelayed({
-            val intent = Intent(this, CameraActivity::class.java)
+            val intent = Intent(this, ArcoreActivity::class.java)
             startActivity(intent)
             finishAffinity()
         }, delay)
@@ -79,7 +79,8 @@ class IntroActivity : AppCompatActivity() {
     }
 
     private fun checkCamera(): Boolean {
-        return packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_LEVEL_FULL)
+        // return packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_LEVEL_FULL)
+        return true
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {

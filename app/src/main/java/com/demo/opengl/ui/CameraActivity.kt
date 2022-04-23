@@ -38,7 +38,7 @@ class CameraActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener, Vie
     }
 
     init {
-        System.loadLibrary("cameraCpp")
+        System.loadLibrary("cameraCppd")
     }
 
     lateinit var sheet: BottomSheetBehavior<View>
