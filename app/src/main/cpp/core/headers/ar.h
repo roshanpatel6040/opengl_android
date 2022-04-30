@@ -90,6 +90,8 @@ private:
 //                                 camera_pose_raw[6] - plane_position.z);
 //        return glm::dot(normal, camera_P_plane);
 //    }
+    void GetTransformMatrixFromAnchor(const ArAnchor &ar_anchor, ArSession *ar_session,
+                                      glm::mat4 *out_model_mat);
 };
 
 #endif //OPENGL_AR_H

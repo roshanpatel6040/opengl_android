@@ -13,6 +13,8 @@
 #include <GLES/gl.h>
 #include <ext.hpp>
 #include <Texture.h>
+#include "../../../arcore/include/arcore_c_api.h"
+#include <plane_renderer.h>
 
 class Circle {
 
@@ -20,7 +22,7 @@ public:
 
     void CreateOnGlThread(AAssetManager *manager);
 
-    void drawCircle(glm::mat4 projection, glm::mat4 camera);
+    void drawCircle(glm::mat4 projection, glm::mat4 camera, glm::mat4 model);
 
     void drawTriangle(glm::mat4 projection, glm::mat4 camera);
 
@@ -37,7 +39,6 @@ private:
     float radius = 0.1f;
 
     std::vector<float> vertices;
-
 };
 
 #endif //OPENGL_CIRCLE_H

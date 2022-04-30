@@ -222,7 +222,7 @@ void Circle::drawSquare(glm::mat4 projection, glm::mat4 camera) {
     GLCall(ib.unBind())
 }
 
-void Circle::drawCircle(glm::mat4 projection, glm::mat4 camera) {
+void Circle::drawCircle(glm::mat4 projection, glm::mat4 camera, glm::mat4 model) {
 
     // Translation
     glm::mat4 translation = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, 0.0f));
@@ -235,7 +235,7 @@ void Circle::drawCircle(glm::mat4 projection, glm::mat4 camera) {
                                        glm::vec3(0.0f, 1.0f, 0.0f));
 
     // Model matrix
-    glm::mat4 modelMatrix = translation * rotationMatrixX;
+    glm::mat4 modelMatrix = model * translation * rotationMatrixX;
     // final projection
     glm::mat4 proj = projection * camera * modelMatrix;
 
@@ -249,8 +249,8 @@ void Circle::drawCircle(glm::mat4 projection, glm::mat4 camera) {
 
     GLCall(GLint mvpHandle = meshShader->getUniformLocation("u_MVP"))
     GLCall(meshShader->setUniformMatrix4fv(mvpHandle, 1 /* No. of matrix array in our case only 1*/,
-                                      glm::value_ptr(
-                                              proj) /* pass reference at 0 0 position other work will be handled by opengl itself Basically opengl will take other values automatically */))
+                                           glm::value_ptr(
+                                                   proj) /* pass reference at 0 0 position other work will be handled by opengl itself Basically opengl will take other values automatically */))
 
     // Draw circle with only stroke
     // GLCall(glDrawArrays(GL_LINE_LOOP, 0, VERTEX_NUM))

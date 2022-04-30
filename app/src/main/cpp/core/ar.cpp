@@ -151,6 +151,7 @@ void ArApplication::onDraw() {
     ArTrackableList_destroy(plane_list);
     plane_list = nullptr;
 
+    glm::mat4 model(1.0f);
     for (auto &colored_anchor : anchors_) {
         ArTrackingState tracking_state = AR_TRACKING_STATE_STOPPED;
         ArAnchor_getTrackingState(session, colored_anchor.anchor,
@@ -158,9 +159,9 @@ void ArApplication::onDraw() {
         if (tracking_state == AR_TRACKING_STATE_TRACKING) {
             // UpdateAnchorColor(&colored_anchor);
             // Render object only if the tracking state is AR_TRACKING_STATE_TRACKING.
-            // util::GetTransformMatrixFromAnchor(*colored_anchor.anchor, ar_session_,&model_mat);
+            GetTransformMatrixFromAnchor(*colored_anchor.anchor, session, &model);
             // andy_renderer_.Draw(projection_mat, view_mat, model_mat, color_correction, colored_anchor.color);
-            circleRenderer.drawCircle(projection_mat, view_mat);
+            circleRenderer.drawCircle(projection_mat, view_mat, model);
             // bobLampCleanRenderer.Draw(projection_mat, view_mat);
         }
     }
@@ -312,4 +313,16 @@ glm::mat3 ArApplication::GetTextureTransformMatrix(const ArSession *session, con
     uvTransform[8] = 1;
 
     return glm::make_mat3(uvTransform);
+}
+
+void ArApplication::GetTransformMatrixFromAnchor(const ArAnchor &ar_anchor,
+                                                 ArSession *ar_session,
+                                                 glm::mat4 *out_model_mat) {
+    if (out_model_mat == nullptr) {
+        LOGE("util::GetTransformMatrixFromAnchor model_mat is null.");
+        return;
+    }
+    ScopedArPose pose(ar_session);
+    ArAnchor_getPose(ar_session, &ar_anchor, pose.GetArPose());
+    ArPose_getMatrix(ar_session, pose.GetArPose(), glm::value_ptr(*out_model_mat));
 }

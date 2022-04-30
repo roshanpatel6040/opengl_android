@@ -1169,7 +1169,8 @@ Java_com_demo_opengl_provider_CameraInterface_onDrawFrame(JNIEnv *jni, jobject o
 
     // circle->Draw(projection, meshCamera->getCameraMatrix());
     // circle->drawSquare(projection, meshCamera->getCameraMatrix());
-    circle->drawCircle(projection, meshCamera->getCameraMatrix());
+    // TODO add model matrix parameter
+    // circle->drawCircle(projection, meshCamera->getCameraMatrix());
 }
 
 void
