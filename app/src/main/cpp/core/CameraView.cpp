@@ -6,7 +6,7 @@
 #include "Renderer.h"
 
 CameraView::CameraView() {
-    cameraPos = glm::vec3(0.0f, 0.0f, -3.0f);
+    cameraPos = glm::vec3(0.0f, 0.0f, 3.0f);
     cameraFront = glm::vec3(0.0f, 0.0f, 0.0f);
     cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
     camera = glm::lookAt(cameraPos, cameraFront, cameraUp);
@@ -34,6 +34,10 @@ void CameraView::useCamera() {
     GLCall(glUniformMatrix4fv(mCameraLocation, 1, false, glm::value_ptr(camera)))
 }
 
+void CameraView::useCamera(glm::mat4 cameraView) {
+    GLCall(glUniformMatrix4fv(mCameraLocation, 1, false, glm::value_ptr(cameraView)))
+}
+
 void CameraView::setLocation(GLuint location, const char *name) {
     GLCall(mCameraLocation = glGetUniformLocation(location, name))
 }
@@ -44,6 +48,14 @@ GLuint CameraView::getLocation() {
 
 Vector3f CameraView::getCameraPos() const {
     return Vector3f(cameraPos.x, cameraPos.y, cameraPos.z);
+}
+
+glm::mat4 CameraView::getCameraMatrix() const {
+    return camera;
+}
+
+void CameraView::setCameraView(glm::mat4 cameraView) {
+    camera = cameraView;
 }
 
 CameraView::~CameraView() = default;

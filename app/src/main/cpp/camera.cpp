@@ -59,6 +59,7 @@
 #include "assimp/Importer.hpp"
 #include "assimp/scene.h"
 #include <assimp/port/AndroidJNI/AndroidJNIIOSystem.h>
+#include <Circle.h>
 
 using namespace std;
 
@@ -123,6 +124,8 @@ Shader *videoShader;
 VertexBuffer *videoVertexBuffer;
 IndexBuffer *videoIndexBuffer;
 GLuint videoTextureId;
+
+Circle *circle;
 
 const string vertexShaderCode = "#version 320 es\n"
                                 "in vec3 position;\n"
@@ -993,6 +996,9 @@ void Java_com_demo_opengl_provider_CameraInterface_onSurfaceCreated(JNIEnv *jni,
     GLCall(meshCamera->setLocation(meshProgram, "camera"))
 
     // createVideoProgram();
+
+    circle = new Circle();
+    circle->CreateOnGlThread(assetManager);
 }
 
 void Java_com_demo_opengl_provider_CameraInterface_onSurfaceChanged(JNIEnv *jni,
@@ -1003,9 +1009,9 @@ void Java_com_demo_opengl_provider_CameraInterface_onSurfaceChanged(JNIEnv *jni,
 
     windowWidth = width;
     windowHeight = height;
-//    ANativeWindow_acquire(previewWindow);
-//    ANativeWindow_setBuffersGeometry(previewWindow, windowWidth, windowHeight,
-//                                     WINDOW_FORMAT_RGBA_8888);
+    ANativeWindow_acquire(previewWindow);
+    ANativeWindow_setBuffersGeometry(previewWindow, windowWidth, windowHeight,
+                                     WINDOW_FORMAT_RGBA_8888);
 
 }
 void
@@ -1092,11 +1098,11 @@ Java_com_demo_opengl_provider_CameraInterface_onDrawFrame(JNIEnv *jni, jobject o
     glm::mat4 projection = glm::perspective(45.0f,
                                             (float) windowWidth / (float) windowHeight,
                                             0.1f,
-                                            1000.0f);
-    glm::mat4 translate = glm::translate(glm::mat4(1.0), glm::vec3(0.0f, 0.0f, 30.0f));
+                                            100.0f);
+    glm::mat4 translate = glm::translate(glm::mat4(1.0), glm::vec3(0.0f, 0.0f, -30.0f));
     glm::mat4 rotationX = glm::rotate(glm::mat4(1.0f), glm::radians(270.0f),
                                       glm::vec3(1.0f, 0.0f, 0.0f));
-    glm::mat4 rotationY = glm::rotate(glm::mat4(1.0f), glm::radians(180.0f),
+    glm::mat4 rotationY = glm::rotate(glm::mat4(1.0f), glm::radians(360.0f),
                                       glm::vec3(0.0f, 0.0f, 1.0f));
     glm::mat4 scale = glm::scale(glm::mat4(1.0), glm::vec3(0.2, 0.2, 0.2));
     glm::mat4 model = translate * rotationX * rotationY * scale;
@@ -1160,6 +1166,10 @@ Java_com_demo_opengl_provider_CameraInterface_onDrawFrame(JNIEnv *jni, jobject o
     float *videoMvp = jni->GetFloatArrayElements(videoArray, nullptr);
     // drawVideoProgram(mvp, videoMvp);
     jni->ReleaseFloatArrayElements(videoArray, videoMvp, 0);
+
+    // circle->Draw(projection, meshCamera->getCameraMatrix());
+    // circle->drawSquare(projection, meshCamera->getCameraMatrix());
+    circle->drawCircle(projection, meshCamera->getCameraMatrix());
 }
 
 void

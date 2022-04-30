@@ -5,6 +5,8 @@
 #include <ar.h>
 #include <android/asset_manager_jni.h>
 #include <arcore_c_api.h>
+#include <vector>
+#include "stb_image/stb_image.cpp"
 
 ArApplication *application;
 

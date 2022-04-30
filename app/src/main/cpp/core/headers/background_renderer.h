@@ -7,7 +7,7 @@
 #include <cstdlib>
 #include <string>
 #include <Shader.h>
-#include "../../../arcore/include/arcore_c_api.h">
+#include "../../../arcore/include/arcore_c_api.h"
 
 // This class renders the passthrough camera image into the OpenGL frame.
 class BackgroundRenderer {

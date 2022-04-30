@@ -7,6 +7,7 @@ import android.view.GestureDetector
 import android.view.MotionEvent
 import com.demo.opengl.R
 import com.demo.opengl.provider.ArcoreInterface
+import com.demo.opengl.utils.Utils
 import kotlinx.android.synthetic.main.activity_arcore.*
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
@@ -16,7 +17,8 @@ class ArcoreActivity : AppCompatActivity(), GLSurfaceView.Renderer {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_arcore)
-
+        getExternalFilesDir(null)?.deleteRecursively()
+        Utils.copyAssets(this, "models/boblampclean")
         setUpGlSurface()
         ArcoreInterface.onCreate(assets)
 

@@ -50,6 +50,11 @@ add_library(ar STATIC src/main/cpp/core/ar.cpp)
 
 add_library(bgRenderer STATIC src/main/cpp/core/background_renderer.cpp)
 
+add_library(renderers STATIC
+        src/main/cpp/core/models/BobLampCleanRenderer.cpp
+        src/main/cpp/core/models/Circle.cpp
+        )
+
 include_directories(src/main/cpp/stb_image)
 include_directories(src/main/cpp/glm)
 include_directories(src/main/cpp/core/headers)
@@ -92,6 +97,7 @@ target_link_libraries( # Specifies the target library.
         arcore
         ar
         bgRenderer
+        renderers
         ${ASSIMP_LIB}
         ${log-lib}
         EGL
@@ -111,6 +117,7 @@ target_link_libraries( # Specifies the target library.
         mesh
         worldTransform
         math
+        renderers
         ${ASSIMP_LIB}
         ${log-lib}
         ${camera-lib}

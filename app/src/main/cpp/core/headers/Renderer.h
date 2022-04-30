@@ -10,6 +10,7 @@ extern "C" {
 
 #include "VertexBuffer.h"
 #include "IndexBuffer.h"
+#include <android/log.h>
 
 #define ASSERT(x) \
     if(!x) { return; } \
@@ -32,6 +33,9 @@ extern "C" {
 void clearError();
 void checkError(int line, const char *name);
 void checkEGLError(int line, const char *name);
+
+#define LOGE(...)  __android_log_print(ANDROID_LOG_ERROR, "Renderer", __VA_ARGS__)
+
 
 class Renderer {
 public:

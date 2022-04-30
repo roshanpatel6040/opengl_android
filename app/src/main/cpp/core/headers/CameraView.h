@@ -25,9 +25,15 @@ public:
 
     void useCamera();
 
+    void useCamera(glm::mat4 cameraView);
+
     GLuint getLocation();
 
     Vector3f getCameraPos() const;
+
+    glm::mat4 getCameraMatrix() const;
+
+    void setCameraView(glm::mat4 cameraView);
 
     ~CameraView();
 

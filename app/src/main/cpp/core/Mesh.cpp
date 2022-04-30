@@ -421,6 +421,9 @@ void Mesh::Render(GLuint program) {
 
     // Necessary to unbind vao for the rest of the other program
     GLCall(glBindVertexArray(0))
+    GLCall(glBindBuffer(GL_ARRAY_BUFFER, 0))
+    GLCall(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0))
+    GLCall(glUseProgram(0))
 }
 
 const Material &Mesh::GetMaterial() {
