@@ -11,6 +11,7 @@
 #include "BobLampCleanRenderer.h"
 #include "background_renderer.h"
 #include "Circle.h"
+#include "plane_renderer.h"
 #include <Renderer.h>
 #include <vector>
 
@@ -42,8 +43,10 @@ private:
     int32_t height = 1;
     int32_t displayRotation = 1;
     bool calculate_uv_transform_ = false;
+    int32_t plane_count_ = 0;
 
     BackgroundRenderer backgroundRenderer;
+    PlaneRenderer planeRenderer;
     BobLampCleanRenderer bobLampCleanRenderer;
     Circle circleRenderer;
 

@@ -49,9 +49,9 @@ void ArApplication::onDestroy() {
 }
 
 void ArApplication::onSurfaceCreated() {
-    // GLCall(glEnable(GL_CULL_FACE))
     backgroundRenderer.InitializeGlContent(assetManager, 0 /*TODO create texture id for depth*/);
     circleRenderer.CreateOnGlThread(assetManager);
+    planeRenderer.InitializeGlContent(assetManager);
     // bobLampCleanRenderer.createOnGlThread(assetManager);
 }
 
@@ -112,8 +112,45 @@ void ArApplication::onDraw() {
         return;
     }
 
-    // Render Andy objects.
-    glm::mat4 model_mat(1.0f);
+    // Update and render planes.
+    ArTrackableList *plane_list = nullptr;
+    ArTrackableList_create(session, &plane_list);
+
+    ArTrackableType plane_tracked_type = AR_TRACKABLE_PLANE;
+    ArSession_getAllTrackables(session, plane_tracked_type, plane_list);
+
+    int32_t plane_list_size = 0;
+    ArTrackableList_getSize(session, plane_list, &plane_list_size);
+    plane_count_ = plane_list_size;
+
+    for (int i = 0; i < plane_list_size; ++i) {
+        ArTrackable *ar_trackable = nullptr;
+        ArTrackableList_acquireItem(session, plane_list, i, &ar_trackable);
+        ArPlane *ar_plane = ArAsPlane(ar_trackable);
+        ArTrackingState out_tracking_state;
+        ArTrackable_getTrackingState(session, ar_trackable,
+                                     &out_tracking_state);
+
+        ArPlane *subsume_plane;
+        ArPlane_acquireSubsumedBy(session, ar_plane, &subsume_plane);
+        if (subsume_plane != nullptr) {
+            ArTrackable_release(ArAsTrackable(subsume_plane));
+            ArTrackable_release(ar_trackable);
+            continue;
+        }
+
+        if (ArTrackingState::AR_TRACKING_STATE_TRACKING != out_tracking_state) {
+            ArTrackable_release(ar_trackable);
+            continue;
+        }
+
+        planeRenderer.Draw(projection_mat, view_mat, *session, *ar_plane);
+        ArTrackable_release(ar_trackable);
+    }
+
+    ArTrackableList_destroy(plane_list);
+    plane_list = nullptr;
+
     for (auto &colored_anchor : anchors_) {
         ArTrackingState tracking_state = AR_TRACKING_STATE_STOPPED;
         ArAnchor_getTrackingState(session, colored_anchor.anchor,
@@ -134,17 +171,14 @@ void ArApplication::onTouched(float x, float y) {
         ArHitResultList *hit_result_list = nullptr;
         ArHitResultList_create(session, &hit_result_list);
         // CHECK(hit_result_list);
-        if (true) {
-            ArFrame_hitTestInstantPlacement(session, arFrame, x, y,
-                                            2.0,
-                                            hit_result_list);
+        if (false) {
+            ArFrame_hitTestInstantPlacement(session, arFrame, x, y, 2.0, hit_result_list);
         } else {
             ArFrame_hitTest(session, arFrame, x, y, hit_result_list);
         }
 
         int32_t hit_result_list_size = 0;
-        ArHitResultList_getSize(session, hit_result_list,
-                                &hit_result_list_size);
+        ArHitResultList_getSize(session, hit_result_list, &hit_result_list_size);
 
         // The hitTest method sorts the resulting list by distance from the camera,
         // increasing.  The first hit result will usually be the most relevant when

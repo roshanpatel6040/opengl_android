@@ -41,6 +41,7 @@ void Circle::CreateOnGlThread(AAssetManager *manager) {
     GLCall(program = glCreateProgram())
     GLCall(meshShader = new Shader(program, vertexTextureShader, fragmentTextureShader))
     GLCall(glLinkProgram(program))
+    glUseProgram(0);
 }
 
 void Circle::drawTriangle(glm::mat4 projection, glm::mat4 camera) {
@@ -224,7 +225,7 @@ void Circle::drawSquare(glm::mat4 projection, glm::mat4 camera) {
 void Circle::drawCircle(glm::mat4 projection, glm::mat4 camera) {
 
     // Translation
-    glm::mat4 translation = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -1.0f, -1.0f));
+    glm::mat4 translation = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, 0.0f));
     // Scaling
     glm::mat4 scaleMatrix = glm::scale(glm::mat4(1.0f), glm::vec3(3.0f));
     // Rotation

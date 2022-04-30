@@ -48,11 +48,11 @@ add_library(math
 
 add_library(ar STATIC src/main/cpp/core/ar.cpp)
 
-add_library(bgRenderer STATIC src/main/cpp/core/background_renderer.cpp)
-
 add_library(renderers STATIC
+        src/main/cpp/core/background_renderer.cpp
         src/main/cpp/core/models/BobLampCleanRenderer.cpp
         src/main/cpp/core/models/Circle.cpp
+        src/main/cpp/core/plane_renderer.cc
         )
 
 include_directories(src/main/cpp/stb_image)
@@ -96,7 +96,6 @@ target_link_libraries( # Specifies the target library.
         math
         arcore
         ar
-        bgRenderer
         renderers
         ${ASSIMP_LIB}
         ${log-lib}

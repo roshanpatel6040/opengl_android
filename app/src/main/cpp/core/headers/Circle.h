@@ -34,7 +34,7 @@ private:
     int VERTEX_NUM = 45;
     float centerX = 0.0f;
     float centerY = 0.0f;
-    float radius = 0.3f;
+    float radius = 0.1f;
 
     std::vector<float> vertices;
 
