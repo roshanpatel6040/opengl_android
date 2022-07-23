@@ -49,7 +49,8 @@ void ArApplication::onDestroy() {
 }
 
 void ArApplication::onSurfaceCreated() {
-    backgroundRenderer.InitializeGlContent(assetManager, 0 /*TODO create texture id for depth*/);
+    depthTexture.CreateOnGlThread();
+    backgroundRenderer.InitializeGlContent(assetManager, depthTexture.GetTextureId());
     circleRenderer.CreateOnGlThread(assetManager);
     planeRenderer.InitializeGlContent(assetManager);
     // bobLampCleanRenderer.createOnGlThread(assetManager);
@@ -101,7 +102,7 @@ void ArApplication::onDraw() {
     ArCamera_getViewMatrix(session, ar_camera, glm::value_ptr(view_mat));
     ArCamera_getProjectionMatrix(session, ar_camera, 0.1f, 100.f, glm::value_ptr(projection_mat));
 
-    backgroundRenderer.Draw(session, arFrame, false);
+    backgroundRenderer.Draw(session, arFrame, true);
 
     ArTrackingState camera_tracking_state;
     ArCamera_getTrackingState(session, ar_camera, &camera_tracking_state);
@@ -110,6 +111,12 @@ void ArApplication::onDraw() {
     // If the camera isn't tracking don't bother rendering other objects.
     if (camera_tracking_state != AR_TRACKING_STATE_TRACKING) {
         return;
+    }
+
+    int32_t isDepthModeSupported;
+    ArSession_isDepthModeSupported(session, AR_DEPTH_MODE_AUTOMATIC, &isDepthModeSupported);
+    if (isDepthModeSupported) {
+        depthTexture.UpdateWithDepthImageOnGlThread(*session, *arFrame);
     }
 
     // Update and render planes.

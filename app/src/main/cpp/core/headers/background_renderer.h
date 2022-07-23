@@ -18,7 +18,7 @@ public:
 
     // Sets up OpenGL state.  Must be called on the OpenGL thread and before any
     // other methods below.
-    void InitializeGlContent(AAssetManager *asset_manager, int depthTextureId);
+    void InitializeGlContent(AAssetManager *asset_manager, unsigned int depthTextureId);
 
     // Draws the background image.  This methods must be called for every ArFrame
     // returned by ArSession_update() to catch display geometry change events.

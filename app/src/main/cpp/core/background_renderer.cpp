@@ -17,7 +17,7 @@ constexpr char kDepthVisualizerFragmentShaderFilename[] =
 
 
 void BackgroundRenderer::InitializeGlContent(AAssetManager *asset_manager,
-                                             int depth_texture_id) {
+                                             unsigned int depth_texture_id) {
     glGenTextures(1, &camera_texture_id_);
     glBindTexture(GL_TEXTURE_EXTERNAL_OES, camera_texture_id_);
     glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -27,8 +27,8 @@ void BackgroundRenderer::InitializeGlContent(AAssetManager *asset_manager,
     std::string vertexSource;
     LoadTextFileFromAssetManager(kCameraVertexShaderFilename, asset_manager, &vertexSource);
     std::string fragmentSource;
-    LoadTextFileFromAssetManager(kCameraFragmentShaderFilename,asset_manager,&fragmentSource);
-    Shader shader(camera_program_,vertexSource,fragmentSource);
+    LoadTextFileFromAssetManager(kCameraFragmentShaderFilename, asset_manager, &fragmentSource);
+    Shader shader(camera_program_, vertexSource, fragmentSource);
     glLinkProgram(camera_program_);
 
     if (!camera_program_) {
@@ -39,19 +39,24 @@ void BackgroundRenderer::InitializeGlContent(AAssetManager *asset_manager,
     camera_position_attrib_ = glGetAttribLocation(camera_program_, "a_Position");
     camera_tex_coord_attrib_ = glGetAttribLocation(camera_program_, "a_TexCoord");
 
-//    depth_program_ = util::CreateProgram(kDepthVisualizerVertexShaderFilename,
-//                                         kDepthVisualizerFragmentShaderFilename,
-//                                         asset_manager);
-//    if (!depth_program_) {
-//        LOGE("Could not create program.");
-//    }
-//
-//    depth_texture_uniform_ =
-//            glGetUniformLocation(depth_program_, "u_DepthTexture");
-//    depth_position_attrib_ = glGetAttribLocation(depth_program_, "a_Position");
-//    depth_tex_coord_attrib_ = glGetAttribLocation(depth_program_, "a_TexCoord");
-//
-//    depth_texture_id_ = depth_texture_id;
+    glGenTextures(1, &depth_texture_id_);
+    depth_program_ = glCreateProgram();
+    std::string vertexDepthSource;
+    LoadTextFileFromAssetManager(kDepthVisualizerVertexShaderFilename, asset_manager, &vertexDepthSource);
+    std::string fragDepthSource;
+    LoadTextFileFromAssetManager(kDepthVisualizerFragmentShaderFilename, asset_manager, &fragDepthSource);
+    Shader depthShader(depth_program_, vertexDepthSource, fragDepthSource);
+    glLinkProgram(depth_program_);
+
+    if (!depth_program_) {
+        // LOGE("Could not create program.");
+    }
+
+    depth_texture_uniform_ = glGetUniformLocation(depth_program_, "u_DepthTexture");
+    depth_position_attrib_ = glGetAttribLocation(depth_program_, "a_Position");
+    depth_tex_coord_attrib_ = glGetAttribLocation(depth_program_, "a_TexCoord");
+
+    depth_texture_id_ = depth_texture_id;
 }
 
 void BackgroundRenderer::Draw(const ArSession *session, const ArFrame *frame,

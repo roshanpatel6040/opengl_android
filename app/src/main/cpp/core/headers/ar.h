@@ -12,6 +12,7 @@
 #include "background_renderer.h"
 #include "Circle.h"
 #include "plane_renderer.h"
+#include "DepthTexture.h"
 #include <Renderer.h>
 #include <vector>
 
@@ -49,6 +50,7 @@ private:
     PlaneRenderer planeRenderer;
     BobLampCleanRenderer bobLampCleanRenderer;
     Circle circleRenderer;
+    DepthTexture depthTexture;
 
     // The anchors at which we are drawing android models using given colors.
     struct ColoredAnchor {
