@@ -23,7 +23,7 @@ private:
 public :
     void createOnGlThread(AAssetManager *assetManager);
 
-    void Draw(glm::mat4 projection, glm::mat4 cameraView);
+    void Draw(glm::mat4 projection, glm::mat4 cameraView, glm::mat4 model);
 
     ~BobLampCleanRenderer();
 

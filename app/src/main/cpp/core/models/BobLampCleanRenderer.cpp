@@ -50,19 +50,20 @@ void BobLampCleanRenderer::createOnGlThread(AAssetManager *assetManager) {
 
     meshCamera = new CameraView();
     GLCall(meshCamera->setLocation(meshProgram, "camera"))
-    GLCall(glBindBuffer(GL_ARRAY_BUFFER,0))
+    GLCall(glBindBuffer(GL_ARRAY_BUFFER, 0))
     // GLCall(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,0))
 }
 
-void BobLampCleanRenderer::Draw(glm::mat4 projection, glm::mat4 cameraView) {
+void BobLampCleanRenderer::Draw(glm::mat4 projection, glm::mat4 cameraView, glm::mat4 model) {
     GLCall(glUseProgram(meshProgram))
+    GLCall(glEnable(GL_CULL_FACE))
     glm::mat4 translate = glm::translate(glm::mat4(1.0), glm::vec3(0.0f, 0.0f, -10.0f));
     glm::mat4 rotationX = glm::rotate(glm::mat4(1.0f), glm::radians(270.0f),
                                       glm::vec3(1.0f, 0.0f, 0.0f));
     glm::mat4 rotationY = glm::rotate(glm::mat4(1.0f), glm::radians(0.0f),
                                       glm::vec3(0.0f, 0.0f, 1.0f));
     glm::mat4 scale = glm::scale(glm::mat4(1.0), glm::vec3(0.05, 0.05, 0.05));
-    glm::mat4 model = translate * rotationX * rotationY * scale;
+    glm::mat4 modifiedModel = model * rotationX * rotationY * scale;
     GLCall(GLuint projectionLocation = meshShader->getUniformLocation("projection"))
     GLCall(GLuint modelLocation = meshShader->getUniformLocation("model"))
     meshCamera->useCamera(cameraView);
@@ -88,7 +89,7 @@ void BobLampCleanRenderer::Draw(glm::mat4 projection, glm::mat4 cameraView) {
 
     // GLCall(GLuint meshTextureLocation = meshShader->getUniformLocation("texture"))
     GLCall(meshShader->setUniformMatrix4fv(projectionLocation, 1, glm::value_ptr(projection)))
-    GLCall(meshShader->setUniformMatrix4fv(modelLocation, 1, glm::value_ptr(model)))
+    GLCall(meshShader->setUniformMatrix4fv(modelLocation, 1, glm::value_ptr(modifiedModel)))
 
     Vector3f localPos = mesh->GetWorldTransform().WorldPosToLocalPos(
             meshCamera->getCameraPos());

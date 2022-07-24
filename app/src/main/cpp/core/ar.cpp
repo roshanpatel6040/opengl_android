@@ -53,7 +53,7 @@ void ArApplication::onSurfaceCreated() {
     backgroundRenderer.InitializeGlContent(assetManager, depthTexture.GetTextureId());
     circleRenderer.CreateOnGlThread(assetManager);
     planeRenderer.InitializeGlContent(assetManager);
-    // bobLampCleanRenderer.createOnGlThread(assetManager);
+    bobLampCleanRenderer.createOnGlThread(assetManager);
 }
 
 void ArApplication::onSurfaceChanged(int32_t rotation, int32_t w, int32_t h) {
@@ -102,7 +102,7 @@ void ArApplication::onDraw() {
     ArCamera_getViewMatrix(session, ar_camera, glm::value_ptr(view_mat));
     ArCamera_getProjectionMatrix(session, ar_camera, 0.1f, 100.f, glm::value_ptr(projection_mat));
 
-    backgroundRenderer.Draw(session, arFrame, true);
+    backgroundRenderer.Draw(session, arFrame, false);
 
     ArTrackingState camera_tracking_state;
     ArCamera_getTrackingState(session, ar_camera, &camera_tracking_state);
@@ -168,8 +168,8 @@ void ArApplication::onDraw() {
             // Render object only if the tracking state is AR_TRACKING_STATE_TRACKING.
             GetTransformMatrixFromAnchor(*colored_anchor.anchor, session, &model);
             // andy_renderer_.Draw(projection_mat, view_mat, model_mat, color_correction, colored_anchor.color);
-            circleRenderer.drawCircle(projection_mat, view_mat, model);
-            // bobLampCleanRenderer.Draw(projection_mat, view_mat);
+            // circleRenderer.drawCircle(projection_mat, view_mat, model);
+            bobLampCleanRenderer.Draw(projection_mat, view_mat, model);
         }
     }
 }
