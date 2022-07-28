@@ -30,6 +30,16 @@ class ArcoreActivity : AppCompatActivity(), GLSurfaceView.Renderer {
                 return true
             }
 
+            override fun onScroll(e1: MotionEvent?, e2: MotionEvent?, distanceX: Float, distanceY: Float): Boolean {
+                if (e2 == null || e1 == null) {
+                    return false
+                }
+                surfaceView.queueEvent {
+                    ArcoreInterface.onMove(e2.x, e2.y)
+                }
+                return true
+            }
+
             override fun onDown(e: MotionEvent?): Boolean {
                 return true
             }

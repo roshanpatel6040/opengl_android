@@ -7,6 +7,7 @@
 #include <android/log.h>
 #include "ar.h"
 #include "thread"
+#include <../glm/gtx/matrix_decompose.hpp>
 
 ArApplication::ArApplication(AAssetManager *manager) : assetManager(manager) {
 
@@ -158,7 +159,7 @@ void ArApplication::onDraw() {
     ArTrackableList_destroy(plane_list);
     plane_list = nullptr;
 
-    glm::mat4 model(1.0f);
+    // glm::mat4 model(1.0f);
     for (auto &colored_anchor : anchors_) {
         ArTrackingState tracking_state = AR_TRACKING_STATE_STOPPED;
         ArAnchor_getTrackingState(session, colored_anchor.anchor,
@@ -166,10 +167,10 @@ void ArApplication::onDraw() {
         if (tracking_state == AR_TRACKING_STATE_TRACKING) {
             // UpdateAnchorColor(&colored_anchor);
             // Render object only if the tracking state is AR_TRACKING_STATE_TRACKING.
-            GetTransformMatrixFromAnchor(*colored_anchor.anchor, session, &model);
+            // GetTransformMatrixFromAnchor(*colored_anchor.anchor, session, &model);
             // andy_renderer_.Draw(projection_mat, view_mat, model_mat, color_correction, colored_anchor.color);
-            // circleRenderer.drawCircle(projection_mat, view_mat, model);
-            bobLampCleanRenderer.Draw(projection_mat, view_mat, model);
+            circleRenderer.drawCircle(projection_mat, view_mat, colored_anchor.modelTransformation);
+            // bobLampCleanRenderer.Draw(projection_mat, view_mat, model);
         }
     }
 }
@@ -283,6 +284,9 @@ void ArApplication::onTouched(float x, float y) {
             ColoredAnchor colored_anchor;
             colored_anchor.anchor = anchor;
             colored_anchor.trackable = ar_trackable;
+            glm::mat4 model(1.0);
+            GetTransformMatrixFromAnchor(*anchor, session, &model);
+            colored_anchor.modelTransformation = model;
 
             // UpdateAnchorColor(&colored_anchor);
             anchors_.push_back(colored_anchor);
@@ -294,6 +298,71 @@ void ArApplication::onTouched(float x, float y) {
             hit_result_list = nullptr;
         }
     }
+}
+
+void ArApplication::onMove(float x, float y) {
+    ArHitResultList *hit_result_list = nullptr;
+    ArHitResultList_create(session, &hit_result_list);
+    ArFrame_hitTest(session, arFrame, x, y, hit_result_list);
+
+    int32_t hit_result_list_size = 0;
+    ArHitResultList_getSize(session, hit_result_list, &hit_result_list_size);
+
+    glm::mat4 matrix(1.0);
+    ArHitResult *ar_hit_result = nullptr;
+    for (int32_t i = 0; i < hit_result_list_size; ++i) {
+        ArHitResult *ar_hit = nullptr;
+        ArHitResult_create(session, &ar_hit);
+        ArHitResultList_getItem(session, hit_result_list, i, ar_hit);
+
+        if (ar_hit == nullptr) {
+            // LOGE("HelloArApplication::OnTouched ArHitResultList_getItem error");
+            return;
+        }
+
+        ArTrackable *ar_trackable = nullptr;
+        ArHitResult_acquireTrackable(session, ar_hit, &ar_trackable);
+        ArTrackableType ar_trackable_type = AR_TRACKABLE_NOT_VALID;
+        ArTrackable_getType(session, ar_trackable, &ar_trackable_type);
+        // Creates an anchor if a plane or an oriented point was hit.
+        if (AR_TRACKABLE_PLANE == ar_trackable_type) {
+            ArPose *hit_pose = nullptr;
+            ArPose_create(session, nullptr, &hit_pose);
+            ArHitResult_getHitPose(session, ar_hit, hit_pose);
+            int32_t in_polygon = 0;
+            ArPlane *ar_plane = ArAsPlane(ar_trackable);
+            ArPlane_isPoseInPolygon(session, ar_plane, hit_pose, &in_polygon);
+            ArPose_destroy(hit_pose);
+            if (!in_polygon /*|| normal_distance_to_plane < 0*/) {
+                continue;
+            }
+            ar_hit_result = ar_hit;
+            break;
+        }
+    }
+
+    if (ar_hit_result) {
+        ArAnchor *anchor = nullptr;
+        if (ArHitResult_acquireNewAnchor(session, ar_hit_result, &anchor) !=
+            AR_SUCCESS) {
+            return;
+        }
+        // Get matrix from created anchor and release it
+        GetTransformMatrixFromAnchor(*anchor, session, &matrix);
+
+        ArAnchor_release(anchor);
+        ArHitResult_destroy(ar_hit_result);
+        ar_hit_result = nullptr;
+        ArHitResultList_destroy(hit_result_list);
+        hit_result_list = nullptr;
+    }
+
+    // TODO tap and select model
+    for (auto &anchor : anchors_) {
+        // Update matrix from last created anchor
+        anchors_[0].modelTransformation = matrix;
+    }
+
 }
 
 glm::mat3 ArApplication::GetTextureTransformMatrix(const ArSession *session, const ArFrame *frame) {

@@ -36,6 +36,8 @@ public:
 
     void onTouched(float x, float y);
 
+    void onMove(float x, float y);
+
 private:
     AAssetManager *assetManager;
     ArSession *session = nullptr;
@@ -56,6 +58,8 @@ private:
     struct ColoredAnchor {
         ArAnchor *anchor;
         ArTrackable *trackable;
+        glm::mat4 modelTransformation;
+        bool currentlySelected = false;
         float color[4];
     };
 

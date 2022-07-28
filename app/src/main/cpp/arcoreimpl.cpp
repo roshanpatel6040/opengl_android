@@ -54,5 +54,12 @@ extern "C"
 JNIEXPORT void JNICALL
 Java_com_demo_opengl_provider_ArcoreInterface_onTouched(JNIEnv *env, jobject thiz, jfloat x,
                                                         jfloat y) {
-    application->onTouched(x,y);
+    application->onTouched(x, y);
+}
+
+extern "C"
+JNIEXPORT void JNICALL
+Java_com_demo_opengl_provider_ArcoreInterface_onMove(JNIEnv *env, jobject thiz, jfloat x,
+                                                     jfloat y) {
+    application->onMove(x, y);
 }

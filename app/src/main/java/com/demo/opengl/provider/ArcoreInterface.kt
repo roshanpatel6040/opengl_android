@@ -14,6 +14,7 @@ object ArcoreInterface {
     external fun onSurfaceChanged(rotation: Int, width: Int, height: Int)
     external fun onDrawFrame()
     external fun onTouched(x: Float, y: Float)
+    external fun onMove(x : Float, y : Float)
     external fun onCreate(manager: AssetManager)
     external fun onResume(context: Context, activity: Activity)
     external fun onPause()
