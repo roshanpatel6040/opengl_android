@@ -22,7 +22,7 @@ public:
 
     void CreateOnGlThread(AAssetManager *manager);
 
-    void drawCircle(glm::mat4 projection, glm::mat4 camera, glm::mat4 model);
+    void drawCircle(int objectIdentity, bool selected, glm::mat4 projection, glm::mat4 camera, glm::mat4 model);
 
     void drawTriangle(glm::mat4 projection, glm::mat4 camera);
 

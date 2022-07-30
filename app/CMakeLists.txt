@@ -50,6 +50,8 @@ add_library(ar STATIC src/main/cpp/core/ar.cpp)
 
 add_library(depthTexture STATIC src/main/cpp/core/DepthTexture.cpp)
 
+add_library(pickTexture STATIC src/main/cpp/core/PickTexture.cpp)
+
 add_library(renderers STATIC
         src/main/cpp/core/background_renderer.cpp
         src/main/cpp/core/models/BobLampCleanRenderer.cpp
@@ -99,6 +101,7 @@ target_link_libraries( # Specifies the target library.
         arcore
         ar
         depthTexture
+        pickTexture
         renderers
         ${ASSIMP_LIB}
         ${log-lib}

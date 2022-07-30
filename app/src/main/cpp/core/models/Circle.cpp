@@ -23,7 +23,8 @@ void Circle::CreateOnGlThread(AAssetManager *manager) {
 //        vertices[start + i * 3] *= ratio;
 //    }
 
-    std::string vertexTextureShader = "attribute vec3 position;\n"
+    std::string vertexTextureShader = "#version 320 es\n"
+                                      "in vec3 position;\n"
                                       "uniform mat4 u_MVP;\n"
                                       "void main()\n"
                                       "{\n"
@@ -31,10 +32,16 @@ void Circle::CreateOnGlThread(AAssetManager *manager) {
                                       " gl_PointSize = 20.0;\n"
                                       "}";
 
-    std::string fragmentTextureShader = "uniform vec4 color[2];\n" // Passing multiple rgba
+    std::string fragmentTextureShader = "#version 320 es\n"
+                                        "precision mediump int;\n"
+                                        "precision highp float;\n"
+                                        "uniform int objectIdentity;\n"
+                                        "layout(location = 0) out vec4 color;\n"
+                                        "layout(location = 1) out int identity;\n"
                                         "void main()\n"
                                         "{\n"
-                                        " gl_FragColor = vec4(1.0,0.0,0.0,1.0);\n" // assign it to texture color
+                                        "color = vec4(1.0,0.0,0.0,1.0);\n"
+                                        "identity = objectIdentity;\n"
                                         "}";
 
     GLCall(glLineWidth(5))
@@ -222,7 +229,7 @@ void Circle::drawSquare(glm::mat4 projection, glm::mat4 camera) {
     GLCall(ib.unBind())
 }
 
-void Circle::drawCircle(glm::mat4 projection, glm::mat4 camera, glm::mat4 model) {
+void Circle::drawCircle(int objectIdentity, bool selected, glm::mat4 projection, glm::mat4 camera, glm::mat4 model) {
 
     // Translation
     glm::mat4 translation = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, 0.0f));
@@ -252,12 +259,21 @@ void Circle::drawCircle(glm::mat4 projection, glm::mat4 camera, glm::mat4 model)
                                            glm::value_ptr(
                                                    proj) /* pass reference at 0 0 position other work will be handled by opengl itself Basically opengl will take other values automatically */))
 
+    GLCall(GLuint objectLocation = meshShader->getUniformLocation("objectIdentity"))
+    GLCall(glUniform1i(objectLocation, objectIdentity))
+
+    if (selected) {
+        GLCall(glDrawArrays(GL_LINE_LOOP, 0, VERTEX_NUM))
+    } else {
+        GLCall(glDrawArrays(GL_TRIANGLE_FAN, 0, VERTEX_NUM))
+    }
+
     // Draw circle with only stroke
     // GLCall(glDrawArrays(GL_LINE_LOOP, 0, VERTEX_NUM))
     // Draw circle with stroke points
     // GLCall(glDrawArrays(GL_POINTS, 0, VERTEX_NUM))
     // Draw fill circle
-    GLCall(glDrawArrays(GL_TRIANGLE_FAN, 0, VERTEX_NUM))
+    // GLCall(glDrawArrays(GL_TRIANGLE_FAN, 0, VERTEX_NUM))
 
     GLCall(meshShader->disableVertexAttribPointer(positionHandle))
 
