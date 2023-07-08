@@ -2,7 +2,7 @@
 
 Features
 
-- Camera filter on live camera preview
+- Filters on live camera preview, capture images with filters
 
 - Green screen effect
 
