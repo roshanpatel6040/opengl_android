@@ -1,8 +1,13 @@
 # opengl_android
 
-Camera filter on live camera preview
-Green screen effect
-Arcore NDK library
-Assimp for model loading
+Features
 
-NDK using c++
+- Camera filter on live camera preview
+
+- Green screen effect
+
+- Arcore NDK library
+
+- Assimp for model loading
+
+Arcore, Opengl es implemented using NDK c++
